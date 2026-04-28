@@ -1,7 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useT } from '../i18n';
 import { fetchProjectFileText, projectFileUrl } from '../providers/registry';
-import { exportAsHtml, exportAsPdf, exportAsZip } from '../runtime/exports';
+import {
+  exportAsHtml,
+  exportAsPdf,
+  exportAsPng,
+  exportAsZip,
+} from '../runtime/exports';
 import { buildSrcdoc } from '../runtime/srcdoc';
 import { saveTemplate } from '../state/projects';
 import type { ProjectFile } from '../types';
@@ -112,6 +117,7 @@ function HtmlViewer({
   const [zoom, setZoom] = useState(100);
   const [presentMenuOpen, setPresentMenuOpen] = useState(false);
   const [shareMenuOpen, setShareMenuOpen] = useState(false);
+  const [pngBusy, setPngBusy] = useState(false);
   // Template save UX. We surface a transient "Saved" pill in the share
   // menu so the user gets feedback without a noisy toast layer.
   const [savingTemplate, setSavingTemplate] = useState(false);
@@ -543,6 +549,27 @@ function HtmlViewer({
                     <span>{t('fileViewer.exportPptx') + '…'}</span>
                   </button>
                   <div className="share-menu-divider" />
+                  <button
+                    type="button"
+                    className="share-menu-item"
+                    role="menuitem"
+                    disabled={pngBusy || !source}
+                    onClick={async () => {
+                      if (!source || pngBusy) return;
+                      setShareMenuOpen(false);
+                      setPngBusy(true);
+                      try {
+                        await exportAsPng(source, exportTitle);
+                      } finally {
+                        setPngBusy(false);
+                      }
+                    }}
+                  >
+                    <span className="share-menu-icon"><Icon name="image" size={14} /></span>
+                    <span>
+                      {pngBusy ? t('common.exportPngBusy') : t('fileViewer.exportPng')}
+                    </span>
+                  </button>
                   <button
                     type="button"
                     className="share-menu-item"

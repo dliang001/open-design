@@ -2,7 +2,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useT } from '../i18n';
 import type { Dict } from '../i18n/types';
 import { fetchSkillExample } from '../providers/registry';
-import { exportAsHtml, exportAsPdf, exportAsZip } from '../runtime/exports';
+import {
+  exportAsHtml,
+  exportAsPdf,
+  exportAsPng,
+  exportAsZip,
+} from '../runtime/exports';
 import { buildSrcdoc } from '../runtime/srcdoc';
 import type { SkillSummary } from '../types';
 import { PreviewModal } from './PreviewModal';
@@ -272,6 +277,7 @@ function ExampleCard({
   const t = useT();
   const [hovered, setHovered] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
+  const [pngBusy, setPngBusy] = useState(false);
   const shareRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -411,6 +417,27 @@ function ExampleCard({
                   </button>
                 ) : null}
                 <div className="share-menu-divider" />
+                <button
+                  type="button"
+                  className="share-menu-item"
+                  role="menuitem"
+                  disabled={pngBusy}
+                  onClick={async () => {
+                    if (pngBusy) return;
+                    setShareOpen(false);
+                    setPngBusy(true);
+                    try {
+                      await exportAsPng(html, exportTitle);
+                    } finally {
+                      setPngBusy(false);
+                    }
+                  }}
+                >
+                  <span className="share-menu-icon">🖼</span>
+                  <span>
+                    {pngBusy ? t('common.exportPngBusy') : t('examples.exportPng')}
+                  </span>
+                </button>
                 <button
                   type="button"
                   className="share-menu-item"

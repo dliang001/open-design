@@ -1,6 +1,19 @@
+---
+category: Starter
+description: A clean, product-oriented default. Use when the brief doesn't call for a specific mood — good for B2B tools, dashboards, and utility pages.
+tags:
+  - minimal
+  - neutral
+  - utility
+  - b2b
+  - modern
+era: timeless
+mood: minimal
+primary_color: "#2F6FEB"
+---
+
 # Neutral Modern
 
-> Category: Starter
 > A clean, product-oriented default. Use when the brief doesn't call for a
 > specific mood — good for B2B tools, dashboards, and utility pages.
 

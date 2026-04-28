@@ -1,10 +1,13 @@
 // Design-system registry. Scans <projectRoot>/design-systems/* for DESIGN.md
-// files. Title comes from the first H1. Category comes from a
-// `> Category: <name>` blockquote line beneath the H1. Summary is the first
-// paragraph between the H1 and the next heading (Category line stripped).
+// files. Title comes from the first H1. Metadata (category, tags, era, mood,
+// primary_color) is read from optional YAML frontmatter at the top of the
+// file; older files that pre-date frontmatter still work via a `> Category:
+// <name>` blockquote fallback. Summary is the first paragraph between the
+// H1 and the next heading (Category line stripped).
 
 import { readdir, readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
+import { parseFrontmatter } from './frontmatter.js';
 
 export async function listDesignSystems(root) {
   const out = [];
@@ -16,24 +19,63 @@ export async function listDesignSystems(root) {
   }
   for (const entry of entries) {
     if (!entry.isDirectory()) continue;
+    // Hidden / underscore-prefixed dirs (e.g. "_seeds") are scratch areas
+    // for in-progress design systems and should not appear in the picker.
+    if (entry.name.startsWith('_') || entry.name.startsWith('.')) continue;
     const designPath = path.join(root, entry.name, 'DESIGN.md');
     try {
       const stats = await stat(designPath);
       if (!stats.isFile()) continue;
       const raw = await readFile(designPath, 'utf8');
-      const titleMatch = /^#\s+(.+?)\s*$/m.exec(raw);
-      const title = cleanTitle(titleMatch?.[1] ?? entry.name);
+      const { data: fm, body } = parseFrontmatter(raw);
+      const titleMatch = /^#\s+(.+?)\s*$/m.exec(body);
+      const title = cleanTitle(
+        (typeof fm.title === 'string' && fm.title) ||
+          titleMatch?.[1] ||
+          entry.name,
+      );
+      const category =
+        (typeof fm.category === 'string' && fm.category) ||
+        extractCategory(body) ||
+        'Uncategorized';
+      const tags = normalizeStringArray(fm.tags);
+      const era = typeof fm.era === 'string' ? fm.era : null;
+      const mood = typeof fm.mood === 'string' ? fm.mood : null;
+      const primaryColor =
+        normalizeHex(typeof fm.primary_color === 'string' ? fm.primary_color : '') ||
+        null;
+      const description =
+        (typeof fm.description === 'string' && fm.description) ||
+        summarize(body);
       out.push({
         id: entry.name,
         title,
-        category: extractCategory(raw) ?? 'Uncategorized',
-        summary: summarize(raw),
-        swatches: extractSwatches(raw),
+        category,
+        summary: description,
+        tags,
+        era,
+        mood,
+        primaryColor,
+        swatches: extractSwatches(body),
         body: raw,
       });
     } catch {
       // Skip.
     }
+  }
+  return out;
+}
+
+function normalizeStringArray(value) {
+  if (!Array.isArray(value)) return [];
+  const out = [];
+  const seen = new Set();
+  for (const v of value) {
+    if (typeof v !== 'string') continue;
+    const t = v.trim().toLowerCase();
+    if (!t || seen.has(t)) continue;
+    seen.add(t);
+    out.push(t);
   }
   return out;
 }

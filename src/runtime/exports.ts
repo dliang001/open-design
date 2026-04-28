@@ -1,9 +1,12 @@
 // Client-side export helpers used by the Share menu in the HTML viewer.
-// Three of the four formats run entirely in the browser:
+// Four of the five formats run entirely in the browser:
 //   - PDF  : open the artifact in a popup window and trigger window.print().
 //            The user picks "Save as PDF" from the system print dialog.
 //   - HTML : download the artifact as a single .html file via a Blob URL.
 //   - ZIP  : pack the artifact into a stored-mode ZIP (see ./zip.ts).
+//   - PNG  : render the artifact in an off-screen iframe and capture it via
+//            html2canvas. Useful for posters, social posts, business cards
+//            — anywhere the deliverable is a flat raster image.
 // PPTX export is fundamentally different — it asks the agent to convert the
 // artifact server-side, so it lives in ProjectView.tsx (not here).
 
@@ -140,4 +143,87 @@ function injectDeckPrintStylesheet(doc: string): string {
   if (/<\/head>/i.test(doc)) return doc.replace(/<\/head>/i, `${tag}</head>`);
   if (/<head[^>]*>/i.test(doc)) return doc.replace(/<head[^>]*>/i, (m) => `${m}${tag}`);
   return tag + doc;
+}
+
+// Render the artifact in a temporary off-screen iframe, then snapshot the
+// document with html2canvas and download a PNG. The iframe is needed to
+// give the artifact its own document context (CSS resets, fonts, layout
+// roots) — capturing a fragment of the host document would inherit our
+// app stylesheet and look nothing like the preview.
+//
+// `width` / `height` default to 1280×800 (a common laptop hero crop) but
+// callers should pass the artifact's intended canvas size when known.
+// Skills that target a specific medium (e.g. social-post-square at
+// 1080×1080) declare their dimensions in SKILL.md frontmatter; the share
+// menu reads those and forwards them here.
+//
+// `scale` controls device-pixel ratio. Default 2 produces ~retina output
+// (~2.6 MB for 1280×800); pass 1 if file size matters more than fidelity.
+export async function exportAsPng(
+  html: string,
+  title: string,
+  opts?: { width?: number; height?: number; scale?: number; backgroundColor?: string },
+): Promise<void> {
+  const width = opts?.width ?? 1280;
+  const height = opts?.height ?? 800;
+  const scale = opts?.scale ?? Math.min(2, window.devicePixelRatio || 1);
+  const backgroundColor = opts?.backgroundColor ?? '#ffffff';
+
+  const iframe = document.createElement('iframe');
+  iframe.style.position = 'fixed';
+  iframe.style.left = '-99999px';
+  iframe.style.top = '0';
+  iframe.style.width = `${width}px`;
+  iframe.style.height = `${height}px`;
+  iframe.style.border = '0';
+  iframe.setAttribute('aria-hidden', 'true');
+  // We need same-origin to walk the iframe's document tree, plus scripts
+  // for skills that lay out via JS (decks, tab strips, etc.).
+  iframe.setAttribute('sandbox', 'allow-same-origin allow-scripts');
+  iframe.srcdoc = buildSrcdoc(html);
+  document.body.appendChild(iframe);
+
+  try {
+    await new Promise<void>((resolve) => {
+      let done = false;
+      const finish = () => {
+        if (done) return;
+        done = true;
+        resolve();
+      };
+      iframe.addEventListener('load', finish, { once: true });
+      // Safety: never hang the UI if `load` doesn't fire (some skills
+      // never resolve their image loads on a hidden iframe).
+      setTimeout(finish, 5000);
+    });
+    // One extra tick so fonts/images settle after `load` fires.
+    await new Promise((r) => setTimeout(r, 250));
+
+    const doc = iframe.contentDocument;
+    if (!doc) throw new Error('PNG export: iframe document unavailable');
+
+    const html2canvasMod = await import('html2canvas');
+    const html2canvas = html2canvasMod.default;
+    const canvas = await html2canvas(doc.documentElement, {
+      width,
+      height,
+      windowWidth: width,
+      windowHeight: height,
+      backgroundColor,
+      useCORS: true,
+      allowTaint: false,
+      scale,
+      logging: false,
+    });
+
+    const blob: Blob = await new Promise((resolve, reject) => {
+      canvas.toBlob((b) => {
+        if (b) resolve(b);
+        else reject(new Error('PNG export: canvas.toBlob returned null'));
+      }, 'image/png');
+    });
+    triggerDownload(blob, `${safeFilename(title, 'artifact')}.png`);
+  } finally {
+    iframe.remove();
+  }
 }

@@ -1,6 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useT } from '../i18n';
-import { exportAsHtml, exportAsPdf, exportAsZip } from '../runtime/exports';
+import {
+  exportAsHtml,
+  exportAsPdf,
+  exportAsPng,
+  exportAsZip,
+} from '../runtime/exports';
 import { buildSrcdoc } from '../runtime/srcdoc';
 
 export interface PreviewView {
@@ -46,6 +51,7 @@ export function PreviewModal({
     : views[0]?.id ?? '';
   const [activeId, setActiveId] = useState<string>(initial);
   const [shareOpen, setShareOpen] = useState(false);
+  const [pngBusy, setPngBusy] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
   const shareRef = useRef<HTMLDivElement | null>(null);
   const stageRef = useRef<HTMLDivElement | null>(null);
@@ -197,6 +203,27 @@ export function PreviewModal({
                     <span>{t('common.exportPdf')}</span>
                   </button>
                   <div className="share-menu-divider" />
+                  <button
+                    type="button"
+                    className="share-menu-item"
+                    role="menuitem"
+                    disabled={pngBusy}
+                    onClick={async () => {
+                      if (!activeHtml || pngBusy) return;
+                      setShareOpen(false);
+                      setPngBusy(true);
+                      try {
+                        await exportAsPng(activeHtml, exportTitle);
+                      } finally {
+                        setPngBusy(false);
+                      }
+                    }}
+                  >
+                    <span className="share-menu-icon">🖼</span>
+                    <span>
+                      {pngBusy ? t('common.exportPngBusy') : t('common.exportPng')}
+                    </span>
+                  </button>
                   <button
                     type="button"
                     className="share-menu-item"
