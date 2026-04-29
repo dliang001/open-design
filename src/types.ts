@@ -196,6 +196,14 @@ export interface ProjectMetadata {
   // generated artifact should *also* draw from. Empty / undefined when the
   // user stayed in single-select mode.
   inspirationDesignSystemIds?: string[];
+  // Visual direction id from the curated 5-school library
+  // (`src/prompts/directions.ts`). Set when the user picked "no brand —
+  // just a direction" at project creation. Mutually exclusive with
+  // `Project.designSystemId`: if present, the system prompt synthesises a
+  // DESIGN.md from this direction's deterministic palette + font stack +
+  // posture, so the agent never freestyles a visual when a brand isn't
+  // available.
+  directionId?: string | null;
 }
 
 export interface Project {

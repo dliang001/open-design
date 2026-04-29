@@ -135,6 +135,10 @@ export interface Dict {
   'newproj.designSystem': string;
   'newproj.dsNoneFreeform': string;
   'newproj.dsNoneSubtitleEmpty': string;
+  'newproj.directionTitle': string;
+  'newproj.directionTitleDsActive': string;
+  'newproj.directionSelected': string;
+  'newproj.directionClear': string;
   'newproj.dsNoneSubtitleSelected': string;
   'newproj.dsCategoryFallback': string;
   'newproj.dsSearch': string;

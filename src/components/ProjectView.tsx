@@ -10,6 +10,10 @@ import {
   writeProjectTextFile,
 } from '../providers/registry';
 import { composeSystemPrompt } from '../prompts/system';
+import {
+  findDirectionById,
+  renderDirectionAsDesignSystem,
+} from '../prompts/directions';
 import { navigate } from '../router';
 import {
   createConversation,
@@ -283,6 +287,20 @@ export function ProjectView({
         if (detail) {
           designSystemBody = detail.body;
           designCache.current.set(project.designSystemId, detail.body);
+        }
+      }
+    } else if (project.metadata?.directionId) {
+      // No brand picked, but the user chose one of the 5 curated visual
+      // directions at project creation. Synthesise a DESIGN.md-shaped body
+      // from the direction's deterministic spec (palette + fonts + posture)
+      // so the agent gets the same authoritative-tokens treatment as it
+      // would from a file-backed system.
+      const direction = findDirectionById(project.metadata.directionId);
+      if (direction) {
+        const synth = renderDirectionAsDesignSystem(direction.id);
+        if (synth) {
+          designSystemBody = synth;
+          designSystemTitle = direction.label;
         }
       }
     }
