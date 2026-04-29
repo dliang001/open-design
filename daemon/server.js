@@ -6,7 +6,12 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import fs from 'node:fs';
 import os from 'node:os';
-import { detectAgents, getAgentDef } from './agents.js';
+import {
+  detectAgents,
+  getAgentDef,
+  resolveOnPath,
+  unwrapWindowsShim,
+} from './agents.js';
 import { listSkills } from './skills.js';
 import { listDesignSystems, readDesignSystem } from './design-systems.js';
 import { createClaudeStreamHandler } from './claude-stream.js';
@@ -57,6 +62,26 @@ fs.mkdirSync(PROJECTS_DIR, { recursive: true });
 const UPLOAD_DIR = path.join(os.tmpdir(), 'od-uploads');
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 fs.mkdirSync(ARTIFACTS_DIR, { recursive: true });
+
+// Above this composed-prompt length on Windows we route through a
+// temp file in cwd instead of argv. Keep well below CreateProcess'
+// ~32 KB hard ceiling so headroom remains for env block and image
+// path attachments. POSIX has no such limit, so the threshold is
+// only consulted on win32.
+const PROMPT_FILE_THRESHOLD = 24000;
+
+// Tiny bootstrap message we hand the agent when the real prompt is
+// too long for argv. The agent reads the file via its built-in Read
+// tool. Wording is deliberately bossy because some smaller models
+// otherwise improvise instead of doing the read.
+function promptFileBootstrap(absPath) {
+  return [
+    `Read the file at \`${absPath}\` for your complete instructions.`,
+    `Do not begin your response until you have read the entire file.`,
+    `Then follow the instructions in the file exactly as written,`,
+    `treating "# User request" as the user's actual message for this turn.`,
+  ].join(' ');
+}
 
 const upload = multer({
   storage: multer.diskStorage({
@@ -759,6 +784,10 @@ export async function startServer({ port = 7456 } = {}) {
     const attachmentHint = safeAttachments.length
       ? `\n\nAttached project files: ${safeAttachments.map((p) => `\`${p}\``).join(', ')}`
       : '';
+    // Compose the full prompt the agent should see — system prompt,
+    // chat transcript, cwd hint, attachment list. This is the "what the
+    // agent reads"; the question is how we deliver it without blowing
+    // Windows' ~32 KB command-line limit.
     const composed = [
       systemPrompt && systemPrompt.trim()
         ? `# Instructions (read first)\n\n${systemPrompt.trim()}${cwdHint}\n\n---\n`
@@ -769,7 +798,42 @@ export async function startServer({ port = 7456 } = {}) {
       safeImages.length ? `\n\n${safeImages.map((p) => `@${p}`).join(' ')}` : '',
     ].join('');
 
-    const args = def.buildArgs(composed, safeImages);
+    // Three delivery lanes, picked in priority order:
+    //   1. promptViaStdin: pipe the composed prompt to child.stdin and
+    //      pass nothing as the user prompt argv. Gemini CLI's -p flag
+    //      is documented as "appended to input on stdin (if any)" so
+    //      passing an empty argv works.
+    //   2. file-bootstrap (Windows + long composed): write composed to
+    //      a dot-prefixed file in cwd (hidden from the file panel by
+    //      `listFiles`'s startsWith('.') filter), and pass a tiny
+    //      bootstrap message — "Read this file first" — as the argv
+    //      prompt. Universal: every code agent we support has a Read
+    //      tool. Borrowed from nexu-io/open-design upstream.
+    //   3. argv: legacy direct path. Only safe for short prompts.
+    let effectivePrompt = composed;
+    let stdinData = null;
+    let tempPromptFile = null;
+
+    if (def.promptViaStdin) {
+      stdinData = composed;
+      effectivePrompt = '';
+    } else if (
+      process.platform === 'win32' &&
+      composed.length > PROMPT_FILE_THRESHOLD &&
+      cwd
+    ) {
+      try {
+        tempPromptFile = path.join(cwd, `.od-prompt-${randomUUID()}.md`);
+        fs.writeFileSync(tempPromptFile, composed, 'utf8');
+        effectivePrompt = promptFileBootstrap(tempPromptFile);
+      } catch {
+        // File write failed — fall back to argv. Will likely
+        // ENAMETOOLONG, but at least we tried.
+        tempPromptFile = null;
+      }
+    }
+
+    const args = def.buildArgs(effectivePrompt, safeImages);
 
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache, no-transform');
@@ -790,16 +854,68 @@ export async function startServer({ port = 7456 } = {}) {
       cwd,
     });
 
+    // Resolve the binary to its full path so we hit the actual .CMD /
+    // .BAT / .EXE on Windows. Node's child_process.spawn does NOT walk
+    // PATHEXT for bare names — `spawn('claude', ...)` ENOENTs even when
+    // `claude.CMD` is on PATH.
+    const resolvedBin = resolveOnPath(def.bin) || def.bin;
+    // Three Windows-only quirks we have to defuse here, in order:
+    //   1. PATHEXT — `resolvedBin` already handles this.
+    //   2. Node 20.12+ refuses to spawn .cmd/.bat directly (EINVAL,
+    //      CVE-2024-27980 mitigation). Workaround would be `shell:true`.
+    //   3. `shell: true` routes through cmd.exe whose command-line
+    //      limit is ~8 KB; our composed prompts are 20–50 KB so we
+    //      hit ENAMETOOLONG immediately.
+    // Real fix: parse the .CMD shim, extract the underlying real .exe
+    // (Claude pattern) or `node <script.js>` invocation (npm-cmd-shim
+    // pattern used by Gemini / Qwen / most others), and spawn that
+    // directly via CreateProcess. CreateProcess raises the limit to
+    // ~32 KB and skips both the EINVAL ban and shell quoting. Only the
+    // shims that don't match either pattern fall back to `shell: true`
+    // — those will hit the 8 KB ceiling but at least basic prompts work.
+    let spawnExe = resolvedBin;
+    let spawnArgs = args;
+    let useShell = false;
+    if (process.platform === 'win32' && /\.cmd$/i.test(resolvedBin)) {
+      const unwrapped = unwrapWindowsShim(resolvedBin);
+      if (unwrapped) {
+        spawnExe = unwrapped.exe;
+        spawnArgs = [...unwrapped.prepend, ...args];
+      } else {
+        useShell = true;
+      }
+    }
     let child;
     try {
-      child = spawn(def.bin, args, {
+      child = spawn(spawnExe, spawnArgs, {
         env: { ...process.env },
-        stdio: ['ignore', 'pipe', 'pipe'],
+        stdio: [stdinData ? 'pipe' : 'ignore', 'pipe', 'pipe'],
         cwd: cwd || undefined,
+        shell: useShell,
+        windowsHide: true,
       });
     } catch (err) {
       send('error', { message: `spawn failed: ${err.message}` });
+      if (tempPromptFile) fs.unlink(tempPromptFile, () => {});
       return res.end();
+    }
+
+    if (stdinData && child.stdin) {
+      // Pipe the composed prompt to the CLI's stdin and close the
+      // pipe so it knows input has ended.
+      child.stdin.on('error', () => {});
+      child.stdin.write(stdinData);
+      child.stdin.end();
+    }
+
+    if (tempPromptFile) {
+      // Best-effort cleanup of the bootstrap file once the agent
+      // finishes. If we crash before close fires, the dot-prefix keeps
+      // it out of the file panel and the user can clean up by hand.
+      const tmp = tempPromptFile;
+      child.on('close', () => {
+        fs.unlink(tmp, () => {});
+      });
     }
 
     child.stdout.setEncoding('utf8');

@@ -2,6 +2,12 @@ import { useEffect, useMemo, useState } from 'react';
 import { LOCALE_LABEL, LOCALES, useI18n } from '../i18n';
 import type { Locale } from '../i18n';
 import { AgentIcon } from './AgentIcon';
+import {
+  PROVIDER_PRESETS,
+  detectProvider,
+  getPreset,
+  type ProviderId,
+} from '../providers/presets';
 import type { AgentInfo, AppConfig, ExecMode } from '../types';
 
 interface Props {
@@ -13,12 +19,6 @@ interface Props {
   onClose: () => void;
   onRefreshAgents: () => void;
 }
-
-const SUGGESTED_MODELS = [
-  'claude-opus-4-5',
-  'claude-sonnet-4-5',
-  'claude-haiku-4-5',
-];
 
 export function SettingsDialog({
   initial,
@@ -32,6 +32,14 @@ export function SettingsDialog({
   const { t, locale, setLocale } = useI18n();
   const [cfg, setCfg] = useState<AppConfig>(initial);
   const [showApiKey, setShowApiKey] = useState(false);
+  const provider: ProviderId = useMemo(
+    () => detectProvider(cfg.baseUrl),
+    [cfg.baseUrl],
+  );
+  const suggestedModels = useMemo(
+    () => getPreset(provider)?.models ?? [],
+    [provider],
+  );
 
   // If the daemon goes offline mid-edit, force API mode so the UI doesn't
   // pretend Local CLI is selectable.
@@ -47,6 +55,23 @@ export function SettingsDialog({
   );
 
   const setMode = (mode: ExecMode) => setCfg((c) => ({ ...c, mode }));
+
+  // Switching provider rewrites baseUrl + (when the current model isn't
+  // valid for the new provider) the model. We never wipe the API key.
+  function selectProvider(id: ProviderId) {
+    if (id === 'custom') {
+      setCfg((c) => ({ ...c, baseUrl: '' }));
+      return;
+    }
+    const preset = getPreset(id);
+    if (!preset) return;
+    setCfg((c) => {
+      const nextModel = preset.models.includes(c.model)
+        ? c.model
+        : preset.models[0] ?? c.model;
+      return { ...c, baseUrl: preset.baseUrl, model: nextModel };
+    });
+  }
 
   const canSave =
     cfg.mode === 'daemon'
@@ -190,11 +215,47 @@ export function SettingsDialog({
               <h3>{t('settings.apiSection')}</h3>
             </div>
             <label className="field">
+              <span className="field-label">{t('settings.provider')}</span>
+              <div
+                className="seg-control"
+                role="tablist"
+                aria-label={t('settings.provider')}
+              >
+                {PROVIDER_PRESETS.map((p) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={provider === p.id}
+                    className={'seg-btn' + (provider === p.id ? ' active' : '')}
+                    onClick={() => selectProvider(p.id)}
+                  >
+                    <span className="seg-title">{p.label}</span>
+                    <span className="seg-meta">{safeHost(p.baseUrl)}</span>
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={provider === 'custom'}
+                  className={'seg-btn' + (provider === 'custom' ? ' active' : '')}
+                  onClick={() => selectProvider('custom')}
+                >
+                  <span className="seg-title">{t('settings.providerCustom')}</span>
+                  <span className="seg-meta">{t('settings.providerCustomMeta')}</span>
+                </button>
+              </div>
+            </label>
+            <label className="field">
               <span className="field-label">{t('settings.apiKey')}</span>
               <div className="field-row">
                 <input
                   type={showApiKey ? 'text' : 'password'}
-                  placeholder="sk-ant-..."
+                  placeholder={
+                    getPreset(provider)?.keyPrefix
+                      ? `${getPreset(provider)?.keyPrefix}...`
+                      : 'sk-...'
+                  }
                   value={cfg.apiKey}
                   onChange={(e) => setCfg({ ...cfg, apiKey: e.target.value })}
                   autoFocus
@@ -211,19 +272,64 @@ export function SettingsDialog({
                 </button>
               </div>
             </label>
+            {/* Model picker is a real <select> so users immediately see
+                every preset model. Choosing "Custom…" reveals a text
+                input that accepts any model id (the previous datalist
+                pattern looked like a plain text box and hid the other
+                presets behind a non-obvious dropdown gesture). */}
             <label className="field">
               <span className="field-label">{t('settings.model')}</span>
-              <input
-                type="text"
-                value={cfg.model}
-                list="suggested-models"
-                onChange={(e) => setCfg({ ...cfg, model: e.target.value })}
-              />
-              <datalist id="suggested-models">
-                {SUGGESTED_MODELS.map((m) => (
-                  <option value={m} key={m} />
-                ))}
-              </datalist>
+              {(() => {
+                const isCustomModel =
+                  suggestedModels.length > 0 &&
+                  !suggestedModels.includes(cfg.model);
+                return (
+                  <>
+                    <select
+                      value={
+                        suggestedModels.length === 0
+                          ? '__custom__'
+                          : isCustomModel
+                            ? '__custom__'
+                            : cfg.model
+                      }
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        if (v === '__custom__') {
+                          // Switching from a preset to custom: blank the
+                          // model so the user types a fresh value rather
+                          // than carrying the preset id forward.
+                          setCfg({
+                            ...cfg,
+                            model: isCustomModel ? cfg.model : '',
+                          });
+                        } else {
+                          setCfg({ ...cfg, model: v });
+                        }
+                      }}
+                    >
+                      {suggestedModels.map((m) => (
+                        <option value={m} key={m}>
+                          {m}
+                        </option>
+                      ))}
+                      <option value="__custom__">
+                        {t('settings.modelCustomOption')}
+                      </option>
+                    </select>
+                    {(isCustomModel || suggestedModels.length === 0) && (
+                      <input
+                        type="text"
+                        value={cfg.model}
+                        placeholder={t('settings.modelCustomPlaceholder')}
+                        onChange={(e) =>
+                          setCfg({ ...cfg, model: e.target.value })
+                        }
+                      />
+                    )}
+                  </>
+                );
+              })()}
             </label>
             <label className="field">
               <span className="field-label">{t('settings.baseUrl')}</span>
@@ -233,7 +339,11 @@ export function SettingsDialog({
                 onChange={(e) => setCfg({ ...cfg, baseUrl: e.target.value })}
               />
             </label>
-            <p className="hint">{t('settings.apiHint')}</p>
+            <p className="hint">
+              {provider === 'deepseek'
+                ? t('settings.deepseekHint')
+                : t('settings.apiHint')}
+            </p>
           </section>
         )}
 
@@ -287,4 +397,12 @@ export function SettingsDialog({
       </div>
     </div>
   );
+}
+
+function safeHost(url: string): string {
+  try {
+    return new URL(url).host;
+  } catch {
+    return url;
+  }
 }

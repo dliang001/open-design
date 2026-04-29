@@ -1,14 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { createArtifactParser } from '../artifacts/parser';
+import { createArtifactParser, extractStrayHtml } from '../artifacts/parser';
 import { useT } from '../i18n';
 import { streamMessage } from '../providers/anthropic';
 import { streamViaDaemon } from '../providers/daemon';
 import {
   fetchDesignSystem,
+  fetchProjectFileText,
   fetchProjectFiles,
   fetchSkill,
   writeProjectTextFile,
 } from '../providers/registry';
+import { exportAsPptx } from '../runtime/exports';
 import { composeSystemPrompt } from '../prompts/system';
 import { navigate } from '../router';
 import {
@@ -308,6 +310,7 @@ export function ProjectView({
       designSystemTitle,
       metadata: project.metadata,
       template,
+      apiMode: config.mode === 'api',
     });
   }, [
     project.skillId,
@@ -315,6 +318,7 @@ export function ProjectView({
     project.metadata,
     skills,
     designSystems,
+    config.mode,
   ]);
 
   const persistMessage = useCallback(
@@ -373,6 +377,10 @@ export function ProjectView({
 
       const parser = createArtifactParser();
       let liveHtml = '';
+      // Mirror of the assistant message text used for the stray-HTML
+      // fallback at end-of-turn (see onDone). React state isn't readable
+      // synchronously inside the same closure, so we keep our own copy.
+      let liveContent = '';
 
       const updateAssistant = (updater: (prev: ChatMessage) => ChatMessage) => {
         setMessages((curr) =>
@@ -409,6 +417,7 @@ export function ProjectView({
       };
 
       const appendContent = (delta: string) => {
+        liveContent += delta;
         updateAssistant((prev) => ({ ...prev, content: prev.content + delta }));
         for (const ev of parser.feed(delta)) {
           if (ev.type === 'artifact:start') {
@@ -443,6 +452,28 @@ export function ProjectView({
           updateAssistant((prev) => ({ ...prev, endedAt: Date.now() }));
           setStreaming(false);
           abortRef.current = null;
+          // Fallback: some models (notably DeepSeek) ignore the
+          // <artifact ...>...</artifact> handoff rule and dump a complete
+          // HTML document inline (raw or fenced). Without this, the right
+          // pane stays empty even though the chat clearly produced a
+          // deliverable. If no artifact was captured during streaming,
+          // scan the full assistant text for a stand-alone HTML doc and
+          // promote it into an artifact retroactively.
+          if (!liveHtml) {
+            const stray = extractStrayHtml(liveContent);
+            if (stray) {
+              // Borrow <title> as the filename hint when present so the
+              // recovered file matches what the agent thought it was
+              // making (e.g. "Analytics Dashboard" → analytics-dashboard.html).
+              const titleMatch = /<title>([^<]+)<\/title>/i.exec(stray);
+              const recoveredTitle = (titleMatch?.[1] ?? '').trim();
+              setArtifact({
+                identifier: recoveredTitle || 'design',
+                title: recoveredTitle,
+                html: stray,
+              });
+            }
+          }
           // Persist the finished artifact to the project folder so it shows
           // up as a real tab (not just the synthetic "live" stream).
           setArtifact((prev) => {
@@ -556,27 +587,6 @@ export function ProjectView({
     [project.id, projectFiles, requestOpenFile],
   );
 
-  const handleExportAsPptx = useCallback(
-    (fileName: string) => {
-      if (streaming) return;
-      const baseTitle = fileName.replace(/\.html?$/i, '') || fileName;
-      const prompt =
-        `Export @${fileName} as an editable PPTX file titled "${baseTitle}".\n\n` +
-        `Use a PPTX skill (e.g. python-pptx) to produce a real .pptx — one slide per ` +
-        `top-level section/page in the HTML. Preserve text content, headings, and the ` +
-        `general layout intent. Save the file directly into the current project folder ` +
-        `(this conversation's working directory) as \`${baseTitle}.pptx\` so it shows ` +
-        `up in the file list, and report the on-disk path when done.`;
-      const attachment: ChatAttachment = {
-        path: fileName,
-        name: fileName,
-        kind: 'file',
-      };
-      void handleSend(prompt, [attachment]);
-    },
-    [streaming, handleSend],
-  );
-
   const handleStop = useCallback(() => {
     abortRef.current?.abort();
     abortRef.current = null;
@@ -664,6 +674,28 @@ export function ProjectView({
   const isDeck = useMemo(
     () => skills.find((s) => s.id === project.skillId)?.mode === 'deck',
     [skills, project.skillId],
+  );
+
+  // Export an HTML artifact to a real .pptx in the browser via pptxgenjs.
+  // We used to ask the agent to do this server-side with python-pptx, but
+  // that path was unreliable (depended on Write-tool support and on the
+  // agent correctly slicing sections), and gave the user no feedback on
+  // failure. Now we parse the HTML locally and emit the file ourselves.
+  const handleExportAsPptx = useCallback(
+    async (fileName: string) => {
+      const baseTitle = fileName.replace(/\.html?$/i, '') || fileName;
+      const html = await fetchProjectFileText(project.id, fileName);
+      if (html == null) {
+        setError(`Could not read ${fileName} for PPTX export.`);
+        return;
+      }
+      try {
+        await exportAsPptx(html, baseTitle, { deck: isDeck });
+      } catch (e) {
+        setError(`PPTX export failed: ${(e as Error).message ?? String(e)}`);
+      }
+    },
+    [project.id, isDeck],
   );
 
   // Hand the pending prompt to ChatPane exactly once. We snapshot the value
@@ -761,6 +793,7 @@ export function ProjectView({
           onDeleteConversation={handleDeleteConversation}
           onRenameConversation={handleRenameConversation}
           onOpenSettings={onOpenSettings}
+          projectKind={project.metadata?.kind}
         />
         <FileWorkspace
           projectId={project.id}

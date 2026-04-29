@@ -86,6 +86,50 @@ function findOpenTag(buffer: string): OpenTagMatch {
   return { kind: 'none' };
 }
 
+// Last-ditch HTML extractor for assistants that produced a deliverable
+// but did NOT wrap it in <artifact ...>...</artifact>. Notably, DeepSeek
+// (and some local models) often dump a complete `<!doctype html>...</html>`
+// inline — sometimes inside a markdown ```html``` fence, sometimes as raw
+// text — and ignore the artifact-handoff rule in the system prompt. The
+// streaming parser then never fires `artifact:end`, so the file never
+// lands on disk and the right-hand pane stays empty.
+//
+// Returns the recovered HTML (without surrounding fences) or null if
+// nothing usable was found. We deliberately require a closing `</html>`
+// so we don't persist truncated streams.
+export function extractStrayHtml(content: string): string | null {
+  if (!content) return null;
+
+  const closesHtml = /<\/html>/i;
+  const opensDoc = /<!doctype\s+html|<html[\s>]/i;
+
+  // 1. ```html ... ``` fence — most explicit.
+  const htmlFence = /```html\s*\n([\s\S]*?)```/i.exec(content);
+  if (htmlFence && closesHtml.test(htmlFence[1] ?? '')) {
+    return (htmlFence[1] ?? '').trim();
+  }
+
+  // 2. Any other fenced block whose body looks like a full HTML document.
+  const genericFences = content.matchAll(/```[a-zA-Z0-9_-]*\s*\n([\s\S]*?)```/g);
+  for (const m of genericFences) {
+    const body = m[1] ?? '';
+    if (opensDoc.test(body) && closesHtml.test(body)) {
+      return body.trim();
+    }
+  }
+
+  // 3. Raw HTML embedded directly in the message — pick the shortest
+  //    `<!doctype html>...</html>` window so we don't pull in stray
+  //    text after the document. `[\s\S]+?` keeps the regex non-greedy.
+  const docMatch = /<!doctype\s+html[\s\S]+?<\/html>/i.exec(content);
+  if (docMatch) return docMatch[0].trim();
+
+  const htmlOnly = /<html[\s>][\s\S]+?<\/html>/i.exec(content);
+  if (htmlOnly) return htmlOnly[0].trim();
+
+  return null;
+}
+
 export function createArtifactParser() {
   const state: ParserState = {
     inside: false,

@@ -18,7 +18,7 @@ interface Props {
   files: ProjectFile[];
   onRefreshFiles: () => Promise<void> | void;
   isDeck: boolean;
-  onExportAsPptx?: ((fileName: string) => void) | undefined;
+  onExportAsPptx?: ((fileName: string) => void | Promise<void>) | undefined;
   streaming?: boolean;
   openRequest?: { name: string; nonce: number } | null;
   // Persisted set of open tabs + active tab. Owned by ProjectView so the
