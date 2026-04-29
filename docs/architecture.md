@@ -398,6 +398,44 @@ The model picker in [`SettingsDialog.tsx`](../src/components/SettingsDialog.tsx)
 
 Lesson generalizes: prefer `<select>` for short bounded lists (≤ ~10 options). Reserve `datalist` for genuinely unbounded autocomplete.
 
-### 12.7 Per-mode example starter prompts
+### 12.7 Spawning Node-shim CLIs on Windows — three stacked quirks
+
+Daemon-mode chat went through three failure modes in succession. Each looked like "the CLI is broken" because the actual error surfaced as opaque errno strings; the fix only landed once all three were defused.
+
+**Quirk 1 — `spawn` does not walk PATHEXT.** Most Node-based CLIs install as `.CMD` shim wrappers (`C:\Users\…\npm\gemini.CMD`, `d:\nodejs\claude.CMD`). `spawn('gemini', …)` ENOENTs even though the bare name works in PowerShell. [`daemon/agents.js`](../daemon/agents.js) had a `resolveOnPath()` helper that walks `PATH × PATHEXT`, used by detection only. The chat endpoint used to spawn the bare `def.bin` so it couldn't find the file. Fix: export `resolveOnPath`, resolve before spawning.
+
+**Quirk 2 — Node 20.12+/21.7+ refuses to spawn `.cmd`/`.bat` directly.** Mitigation for [CVE-2024-27980](https://nvd.nist.gov/vuln/detail/CVE-2024-27980) (argv-based command injection on Windows). Even with the resolved path `C:\…\gemini.CMD`, raw `spawn()` returns **`EINVAL`**. The obvious workaround — `shell: true` — does run, but routes through `cmd.exe`.
+
+**Quirk 3 — `cmd.exe` has an ~8 KB command-line limit.** Composed prompts (system + skill + design system + metadata + user message) routinely run 20–50 KB in this app, so the moment Quirk 2's `shell: true` workaround starts working it dies with **`ENAMETOOLONG`**. Note this is a `cmd.exe` ceiling specifically — Windows CreateProcess itself allows ~32 KB. So the fix has to skip `cmd.exe`.
+
+**Real fix: unwrap the .CMD shim.** [`unwrapWindowsShim()`](../daemon/agents.js) reads the `.CMD` and extracts the underlying real invocation:
+
+| Pattern | Example | Unwrap target |
+|---------|---------|---------------|
+| Direct .exe forwarder | `"%dp0%\…\bin\claude.exe"   %*` | spawn that `.exe` directly, no node, no shell |
+| npm-cmd-shim (node + script) | `& "%_prog%"  "%dp0%\…\dist\index.js" %*` | spawn `node.exe` (sibling first, then PATH-resolved) with the `.js` script as argv[1] |
+
+Both unwrapped invocations spawn a real binary directly via Windows CreateProcess — bypassing the EINVAL ban and the cmd.exe length limit, and skipping shell-quoting risk for the prompt argument.
+
+If a future CLI ships a shim shape we don't recognise, `unwrapWindowsShim` returns `null` and the spawn site falls back to `shell: true` — the prompt will hit ENAMETOOLONG at 8 KB but at least short test messages work.
+
+**Quirk 4 — composed prompt exceeds even the 32 KB CreateProcess ceiling.** Even after unwrap, raw `CreateProcess` accepts at most ~32 KB of command line. Open Design's composed prompt routinely runs 30–50 KB once you stack DISCOVERY_AND_PHILOSOPHY (~17 KB), OFFICIAL_DESIGNER_PROMPT (~10 KB), an optional DECK_FRAMEWORK (~18 KB), skill body, design system body, the chat transcript (every prior assistant turn including its full HTML artifact), cwd hint, and file listing. Deck projects always exceed the limit; long-running conversations always exceed it.
+
+**The fix is universal, not per-CLI: `file-bootstrap`.** Borrowed from [nexu-io/open-design upstream](https://github.com/nexu-io/open-design). On Windows when `composed.length > PROMPT_FILE_THRESHOLD` (24 KB; conservative below the 32 KB ceiling) and `cwd` is writable:
+
+1. Daemon writes the composed prompt to `<cwd>/.od-prompt-<uuid>.md`. The dot prefix keeps it out of the file panel because [`projects.js#listFiles`](../daemon/projects.js) skips entries whose name starts with `.`.
+2. Daemon spawns the CLI with a *tiny* bootstrap message as the user prompt: `"Read the file at \`<path>\` for your complete instructions. Do not begin your response until you have read the entire file. Then follow the instructions in the file exactly as written, treating # User request as the user's actual message for this turn."`
+3. The CLI invokes its built-in Read tool, opens the file, sees the real instructions and the actual user turn at the bottom, and proceeds.
+4. The file is unlinked when the child exits.
+
+Argv stays at ~400 bytes regardless of how huge `composed` gets. Works for **any code agent that has a Read tool** — Claude Code, Gemini, Qwen, Codex, OpenCode, Cursor — without per-CLI flags. Tested at 50 KB composed prompts: argv 395 bytes, agent reads the file, replies normally.
+
+**Per-CLI alternative — `promptViaStdin`.** Some CLIs accept their prompt on stdin in non-interactive mode. Gemini's `--help` documents `-p` as *"Prompt. Appended to input on stdin (if any)"* — passing an empty `-p` makes stdin the entire prompt. For these adapters set `promptViaStdin: true` in [`AGENT_DEFS`](../daemon/agents.js); the daemon pipes the composed prompt to `child.stdin` and skips the file-bootstrap path. Lane priority: `promptViaStdin` → `file-bootstrap` (Windows + long) → `argv` (POSIX or short).
+
+If you ever add a new CLI adapter, the rule: **never put a multi-KB prompt on argv**. Either flip `promptViaStdin: true` (if the CLI supports stdin in print mode) or rely on the universal file-bootstrap path. The `bin` field stays bare; the unwrap ladder still applies on top.
+
+**Why the upstream pattern beats `--append-system-prompt-file` and friends.** An earlier draft used Claude Code's `--append-system-prompt-file` flag to ship the system prompt out of argv. It worked for Claude but didn't generalize, and it didn't fix the *bigger* leak: the chat transcript itself accumulates HTML artifacts every turn and goes into argv via the `message` field. File-bootstrap puts the *whole composed prompt* in a file, transcript and all, and is one path for every CLI.
+
+### 12.8 Per-mode example starter prompts
 
 [`ChatPane.tsx`](../src/components/ChatPane.tsx) used to pull from a flat global `EXAMPLE_PROMPT_KEYS` array — three cards regardless of project kind. Prototype users got a "10-slide pitch deck" suggestion as their first card, deck users got a "long-scroll annual report" suggestion. Now `EXAMPLES_BY_KIND` is keyed by `prototype` / `deck` / `template` and `ChatPane` accepts a `projectKind` prop; `ProjectView` passes `project.metadata?.kind`. Keep the three cards-per-kind shape — more cards crowds the empty state, fewer feels barren.
