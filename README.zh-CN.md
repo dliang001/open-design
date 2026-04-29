@@ -503,6 +503,25 @@ Daemon 启动时从 `PATH` 自动检测，无需配置。
 
 加一个新 CLI = 在 [`daemon/agents.js`](daemon/agents.js) 里加一项。流式格式从 `claude-stream-json`（类型化事件）和 `plain`（原始文本）两种里选一个。
 
+## API 服务商（BYOK）
+
+如果你不想装 CLI，或者想直接从浏览器调远程模型，打开 **设置 → API 接入** 选一个服务商即可。整条 API 通道都是 BYOK：API Key 从输入框读入，**只写到 `localStorage`**，由浏览器直连你选定的 Base URL —— **不会上传到我们的服务器**。清掉浏览器数据，Key 也就没了。
+
+| 服务商 | Base URL | 推荐模型 | 备注 |
+|---|---|---|---|
+| **Anthropic**（默认） | `https://api.anthropic.com` | `claude-opus-4-5`、`claude-sonnet-4-5`、`claude-haiku-4-5` | 原生接口，Key 通常以 `sk-ant-` 开头。 |
+| **DeepSeek** | `https://api.deepseek.com/anthropic` | `deepseek-v4-flash`、`deepseek-v4-pro`、`deepseek-chat`、`deepseek-reasoner` | DeepSeek 在 `/anthropic` 下提供与 Anthropic 兼容的 `/v1/messages`，同一份 SDK 直接复用。`deepseek-chat` 与 `deepseek-reasoner` 将于 2026/07/24 弃用，分别对应 `deepseek-v4-flash` 的非思考与思考模式。Key 在 [platform.deepseek.com](https://platform.deepseek.com) 申请。 |
+| **自定义** | （自填） | （自填） | 任何兼容 Anthropic 协议的服务，复用同一套 SDK。 |
+
+切换步骤：
+
+1. 点右上角头像 → **设置**。
+2. 在 **执行模式** 选 **API 接入**（而不是本机 CLI）。
+3. 在 **服务商** 选 **Anthropic** / **DeepSeek** / **自定义** —— Base URL 与模型下拉会自动填好。
+4. 粘贴 API Key，选好模型，**保存**。
+
+所有配置只走 `localStorage`，不会写盘也不会发回任何远程服务器。可在 DevTools → Application → Local Storage → `open-design:config` 自行核对。
+
 ## 引用与师承
 
 每一个被借鉴的开源项目都列在这里。点链接可以验证师承。

@@ -503,6 +503,25 @@ Auto-detected from `PATH` on daemon boot. No config required.
 
 Adding a new CLI is one entry in [`daemon/agents.js`](daemon/agents.js). Streaming format is one of `claude-stream-json` (typed events) or `plain` (raw text).
 
+## API providers (BYOK)
+
+When you don't want to install a CLI — or when you'd rather call a hosted model directly from the browser — open **Settings → API endpoint** and pick a preset. The whole API path is BYOK: the key is read from a text input, written only to `localStorage`, and sent straight from the browser to the base URL you choose. **It is never uploaded to a server we control.** Clearing your browser data wipes it.
+
+| Provider | Base URL | Suggested models | Notes |
+|---|---|---|---|
+| **Anthropic** (default) | `https://api.anthropic.com` | `claude-opus-4-5`, `claude-sonnet-4-5`, `claude-haiku-4-5` | Native endpoint. Keys begin with `sk-ant-`. |
+| **DeepSeek** | `https://api.deepseek.com/anthropic` | `deepseek-v4-flash`, `deepseek-v4-pro`, `deepseek-chat`, `deepseek-reasoner` | DeepSeek serves an Anthropic-compatible `/v1/messages` at `/anthropic`, so the same SDK works. `deepseek-chat` and `deepseek-reasoner` are deprecated 2026/07/24 — they map to the non-thinking and thinking modes of `deepseek-v4-flash` respectively. Apply for a key at [platform.deepseek.com](https://platform.deepseek.com). |
+| **Custom** | (user-supplied) | (free-form) | Any Anthropic-compatible endpoint. Same wire format, same SDK. |
+
+How to switch:
+
+1. Click the avatar in the top-right → **Settings**.
+2. Under **Execution**, pick **API endpoint** (instead of Local CLI).
+3. Under **Provider**, click **Anthropic** / **DeepSeek** / **Custom** — base URL and the model dropdown auto-fill.
+4. Paste the key, pick (or type) a model, **Save**.
+
+Your selection roundtrips through `localStorage` only; nothing is written to disk or shipped to a remote server. To verify, open DevTools → Application → Local Storage → `open-design:config`.
+
 ## References & lineage
 
 Every external project this repo borrows from. Each link goes to the source so you can verify the provenance.

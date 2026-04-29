@@ -49,7 +49,7 @@ export const en: Dict = {
   'settings.kicker': 'Settings',
   'settings.title': 'Execution & model',
   'settings.subtitle':
-    'Choose between a local code-agent CLI and the Anthropic API (BYOK). Your API key is stored only in this browser.',
+    'Choose between a local code-agent CLI and an Anthropic-compatible API (Anthropic, DeepSeek, or your own endpoint — BYOK). Your API key is stored only in this browser.',
   'settings.modeAria': 'Execution mode',
   'settings.modeDaemon': 'Local CLI',
   'settings.modeDaemonHelp': 'Run via a code-agent CLI on your machine',
@@ -65,7 +65,7 @@ export const en: Dict = {
   'settings.rescanTitle': 'Re-scan PATH',
   'settings.noAgentsDetected':
     'No agents detected yet. Install one of Claude Code, Codex, Gemini CLI, OpenCode, Cursor Agent, or Qwen, then click Rescan.',
-  'settings.apiSection': 'Anthropic API',
+  'settings.apiSection': 'API endpoint',
   'settings.apiKey': 'API key',
   'settings.showKey': 'Show key',
   'settings.hideKey': 'Hide key',
@@ -75,6 +75,11 @@ export const en: Dict = {
   'settings.baseUrl': 'Base URL',
   'settings.apiHint':
     'Calls go directly from this browser to the base URL you set. No proxy. The key never leaves localStorage.',
+  'settings.provider': 'Provider',
+  'settings.providerCustom': 'Custom',
+  'settings.providerCustomMeta': 'your own endpoint',
+  'settings.deepseekHint':
+    'DeepSeek serves an Anthropic-compatible endpoint at /anthropic. Calls go directly from this browser; the key is stored only in localStorage and never leaves your machine.',
   'settings.skipForNow': 'Skip for now',
   'settings.getStarted': 'Get started',
   'settings.envConfigure': 'Configure execution mode',

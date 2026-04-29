@@ -49,7 +49,7 @@ export const zhCN: Dict = {
   'settings.kicker': '设置',
   'settings.title': '执行模式与模型',
   'settings.subtitle':
-    '在本机的代码代理 CLI 与 Anthropic API（自带 Key）之间切换。API Key 只保存在当前浏览器中。',
+    '在本机的代码代理 CLI 与 Anthropic 兼容的 API（Anthropic、DeepSeek 或自填地址，均需自带 Key）之间切换。API Key 仅保存在当前浏览器中。',
   'settings.modeAria': '执行模式',
   'settings.modeDaemon': '本机 CLI',
   'settings.modeDaemonHelp': '通过本机的代码代理 CLI 执行',
@@ -64,7 +64,7 @@ export const zhCN: Dict = {
   'settings.rescanTitle': '重新扫描 PATH',
   'settings.noAgentsDetected':
     '尚未检测到任何代理。请安装 Claude Code、Codex、Gemini CLI、OpenCode、Cursor Agent 或 Qwen 中的一个，然后点击「重新扫描」。',
-  'settings.apiSection': 'Anthropic API',
+  'settings.apiSection': 'API 接入',
   'settings.apiKey': 'API Key',
   'settings.showKey': '显示 Key',
   'settings.hideKey': '隐藏 Key',
@@ -74,6 +74,11 @@ export const zhCN: Dict = {
   'settings.baseUrl': 'Base URL',
   'settings.apiHint':
     '请求会从当前浏览器直连你设置的 Base URL，无中转代理。Key 只存放在 localStorage。',
+  'settings.provider': '服务商',
+  'settings.providerCustom': '自定义',
+  'settings.providerCustomMeta': '自填地址',
+  'settings.deepseekHint':
+    'DeepSeek 在 /anthropic 路径下提供与 Anthropic 兼容的接口。请求由当前浏览器直连发出，API Key 仅保存在 localStorage，不会上传到云端。',
   'settings.skipForNow': '暂时跳过',
   'settings.getStarted': '开始使用',
   'settings.envConfigure': '配置执行模式',

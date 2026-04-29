@@ -85,6 +85,10 @@ export interface Dict {
   'settings.model': string;
   'settings.baseUrl': string;
   'settings.apiHint': string;
+  'settings.provider': string;
+  'settings.providerCustom': string;
+  'settings.providerCustomMeta': string;
+  'settings.deepseekHint': string;
   'settings.skipForNow': string;
   'settings.getStarted': string;
   'settings.envConfigure': string;
