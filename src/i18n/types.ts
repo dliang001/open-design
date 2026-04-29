@@ -40,6 +40,8 @@ export interface Dict {
   'common.exportPdf': string;
   'common.exportZip': string;
   'common.exportHtml': string;
+  'common.exportPng': string;
+  'common.exportPngBusy': string;
   'common.justNow': string;
   'common.minutesAgo': string;
   'common.hoursAgo': string;
@@ -133,6 +135,10 @@ export interface Dict {
   'newproj.designSystem': string;
   'newproj.dsNoneFreeform': string;
   'newproj.dsNoneSubtitleEmpty': string;
+  'newproj.directionTitle': string;
+  'newproj.directionTitleDsActive': string;
+  'newproj.directionSelected': string;
+  'newproj.directionClear': string;
   'newproj.dsNoneSubtitleSelected': string;
   'newproj.dsCategoryFallback': string;
   'newproj.dsSearch': string;
@@ -192,6 +198,7 @@ export interface Dict {
   'examples.shareMenu': string;
   'examples.exportPdfAllSlides': string;
   'examples.exportPptxLocked': string;
+  'examples.exportPng': string;
   'examples.tagSlideDeck': string;
   'examples.tagTemplate': string;
   'examples.tagDesignSystem': string;
@@ -207,6 +214,8 @@ export interface Dict {
   'ds.previewTitle': string;
   'ds.categoryAll': string;
   'ds.categoryUncategorized': string;
+  'ds.tagsLabel': string;
+  'ds.tagAll': string;
   'ds.showcase': string;
   'ds.tokens': string;
 
@@ -390,6 +399,7 @@ export interface Dict {
   'fileViewer.exportPptxNa': string;
   'fileViewer.exportZip': string;
   'fileViewer.exportHtml': string;
+  'fileViewer.exportPng': string;
   'fileViewer.saveAsTemplate': string;
   'fileViewer.savingTemplate': string;
   'fileViewer.savedTemplate': string;

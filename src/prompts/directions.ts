@@ -282,3 +282,53 @@ export function findDirectionByLabel(label: string): DesignDirection | undefined
   const trimmed = label.trim();
   return DESIGN_DIRECTIONS.find((d) => d.label === trimmed || d.id === trimmed);
 }
+
+/** Look up a direction by its kebab-case id. */
+export function findDirectionById(id: string): DesignDirection | undefined {
+  return DESIGN_DIRECTIONS.find((d) => d.id === id);
+}
+
+/**
+ * Render a single chosen direction as a synthetic DESIGN.md body. Used by
+ * the project flow when the user picked "no brand — just a direction" at
+ * creation: we splice this string in as `designSystemBody` so the agent
+ * sees a complete palette / typography / posture spec just like it would
+ * for any of the 86 file-backed design systems.
+ */
+export function renderDirectionAsDesignSystem(id: string): string | null {
+  const d = findDirectionById(id);
+  if (!d) return null;
+  const lines: string[] = [];
+  lines.push(`# ${d.label}`);
+  lines.push('');
+  lines.push(`> ${d.mood}`);
+  lines.push(`> References: ${d.references.join(', ')}.`);
+  lines.push('');
+  lines.push('## Color Palette & Roles');
+  lines.push('');
+  lines.push(`- **Background:** \`${d.palette.bg}\``);
+  lines.push(`- **Surface:** \`${d.palette.surface}\``);
+  lines.push(`- **Foreground:** \`${d.palette.fg}\``);
+  lines.push(`- **Muted:** \`${d.palette.muted}\``);
+  lines.push(`- **Border:** \`${d.palette.border}\``);
+  lines.push(`- **Accent:** \`${d.palette.accent}\``);
+  lines.push('');
+  lines.push('All values are OKLch — drop them straight into `:root` without re-mixing. Do not invent additional tokens; if the brief needs a colour the palette doesn\'t have, surface a comment in the artifact.');
+  lines.push('');
+  lines.push('## Typography');
+  lines.push('');
+  lines.push(`- **Display font stack:** \`${d.displayFont}\``);
+  lines.push(`- **Body font stack:** \`${d.bodyFont}\``);
+  if (d.monoFont) lines.push(`- **Mono font stack:** \`${d.monoFont}\``);
+  lines.push('');
+  lines.push('Bind these to `--font-display` / `--font-body` / `--font-mono` verbatim. No other typeface families.');
+  lines.push('');
+  lines.push('## Layout Posture');
+  lines.push('');
+  for (const p of d.posture) lines.push(`- ${p}`);
+  lines.push('');
+  lines.push('## Agent Prompt Guide');
+  lines.push('');
+  lines.push(`The user picked this direction with no brand to match. Treat the palette and font stacks above as authoritative, exactly as you would for a brand-backed DESIGN.md. The accent colour is the entire chromatic budget — use it once or twice per page, not as a flood. Posture cues describe how the direction *behaves* (border weight, radius, accent budget); honour them in the layout.`);
+  return lines.join('\n');
+}

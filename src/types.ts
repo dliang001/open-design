@@ -99,6 +99,17 @@ export interface SkillSummary {
   animations?: boolean | null;
   hasBody: boolean;
   examplePrompt: string;
+  /** Optional list of canvas sizes the skill targets (e.g. social-post-square
+   *  ships [{ name: "square-1080", width: 1080, height: 1080 }, ...]). The
+   *  PNG exporter picks the first entry by default; the picker can offer the
+   *  rest. Empty array when the skill is responsive / freeform. */
+  dimensions?: SkillDimension[];
+}
+
+export interface SkillDimension {
+  name: string;
+  width: number;
+  height: number;
 }
 
 export interface SkillDetail extends SkillSummary {
@@ -113,6 +124,19 @@ export interface DesignSystemSummary {
   /** 4 representative hex strings extracted from DESIGN.md: [bg, support, fg, accent].
    *  Empty when DESIGN.md doesn't expose its tokens in the bold-and-hex format. */
   swatches?: string[];
+  /** Free-form facets parsed from DESIGN.md frontmatter, used by the picker
+   *  for tag-based filtering (e.g. "minimal", "dark", "luxury"). Always
+   *  lowercase and deduped. Empty array when the file has no frontmatter. */
+  tags?: string[];
+  /** Era hint: "modern" | "classic" | "retro" | "timeless" — drives the
+   *  optional era pill row in the picker. */
+  era?: string | null;
+  /** Mood hint: "minimal" | "playful" | "luxurious" | "energetic" | "warm" |
+   *  "bold" | "confident" | "utilitarian". */
+  mood?: string | null;
+  /** Hex string (e.g. "#5e6ad2"). When set, the picker can render a colour
+   *  filter and the agent prompt can lead with this anchor color. */
+  primaryColor?: string | null;
 }
 
 export interface DesignSystemDetail extends DesignSystemSummary {
@@ -172,6 +196,14 @@ export interface ProjectMetadata {
   // generated artifact should *also* draw from. Empty / undefined when the
   // user stayed in single-select mode.
   inspirationDesignSystemIds?: string[];
+  // Visual direction id from the curated 5-school library
+  // (`src/prompts/directions.ts`). Set when the user picked "no brand —
+  // just a direction" at project creation. Mutually exclusive with
+  // `Project.designSystemId`: if present, the system prompt synthesises a
+  // DESIGN.md from this direction's deterministic palette + font stack +
+  // posture, so the agent never freestyles a visual when a brand isn't
+  // available.
+  directionId?: string | null;
 }
 
 export interface Project {

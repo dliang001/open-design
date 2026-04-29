@@ -2,7 +2,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useT } from '../i18n';
 import type { Dict } from '../i18n/types';
 import { fetchSkillExample } from '../providers/registry';
-import { exportAsHtml, exportAsPdf, exportAsZip } from '../runtime/exports';
+import {
+  exportAsHtml,
+  exportAsPdf,
+  exportAsPng,
+  exportAsZip,
+} from '../runtime/exports';
 import { buildSrcdoc } from '../runtime/srcdoc';
 import type { SkillSummary } from '../types';
 import { PreviewModal } from './PreviewModal';
@@ -272,7 +277,9 @@ function ExampleCard({
   const t = useT();
   const [hovered, setHovered] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
+  const [pngBusy, setPngBusy] = useState(false);
   const shareRef = useRef<HTMLDivElement | null>(null);
+  const previewIframeRef = useRef<HTMLIFrameElement | null>(null);
 
   useEffect(() => {
     if (!shareOpen) return;
@@ -320,8 +327,12 @@ function ExampleCard({
         {html ? (
           <>
             <iframe
+              ref={previewIframeRef}
               title={`${skill.name} ${t('examples.previewLabel').toLowerCase()}`}
-              sandbox="allow-scripts"
+              // allow-same-origin lets exportAsPng capture this iframe's
+              // document directly (faster path); the example HTML is
+              // first-party content shipped with the skill, so it's safe.
+              sandbox="allow-scripts allow-same-origin"
               srcDoc={buildSrcdoc(html)}
               tabIndex={-1}
             />
@@ -411,6 +422,32 @@ function ExampleCard({
                   </button>
                 ) : null}
                 <div className="share-menu-divider" />
+                <button
+                  type="button"
+                  className="share-menu-item"
+                  role="menuitem"
+                  disabled={pngBusy}
+                  onClick={async () => {
+                    if (pngBusy) return;
+                    setShareOpen(false);
+                    setPngBusy(true);
+                    try {
+                      const dim = skill.dimensions?.[0];
+                      await exportAsPng(html, exportTitle, {
+                        sourceIframe: previewIframeRef.current,
+                        width: dim?.width,
+                        height: dim?.height,
+                      });
+                    } finally {
+                      setPngBusy(false);
+                    }
+                  }}
+                >
+                  <span className="share-menu-icon">🖼</span>
+                  <span>
+                    {pngBusy ? t('common.exportPngBusy') : t('examples.exportPng')}
+                  </span>
+                </button>
                 <button
                   type="button"
                   className="share-menu-item"

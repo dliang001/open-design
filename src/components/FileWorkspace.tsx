@@ -21,6 +21,10 @@ interface Props {
   onExportAsPptx?: ((fileName: string) => void) | undefined;
   streaming?: boolean;
   openRequest?: { name: string; nonce: number } | null;
+  // Active skill's intended canvas size (e.g. 1080×1080 for
+  // social-post-square). Forwarded to FileViewer so PNG export rasterises
+  // at the right size instead of falling back to the iframe rect.
+  exportDimensions?: { width: number; height: number };
   // Persisted set of open tabs + active tab. Owned by ProjectView so the
   // daemon's SQLite store can hold the source of truth and survive reloads.
   tabsState: OpenTabsState;
@@ -45,6 +49,7 @@ export function FileWorkspace({
   onExportAsPptx,
   streaming,
   openRequest,
+  exportDimensions,
   tabsState,
   onTabsStateChange,
 }: Props) {
@@ -342,6 +347,7 @@ export function FileWorkspace({
             isDeck={isDeck}
             onExportAsPptx={onExportAsPptx}
             streaming={streaming}
+            exportDimensions={exportDimensions}
           />
         ) : (
           <div className="viewer-empty">

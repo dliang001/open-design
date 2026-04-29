@@ -1,7 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useT } from '../i18n';
 import { fetchProjectFileText, projectFileUrl } from '../providers/registry';
-import { exportAsHtml, exportAsPdf, exportAsZip } from '../runtime/exports';
+import {
+  exportAsHtml,
+  exportAsPdf,
+  exportAsPng,
+  exportAsZip,
+} from '../runtime/exports';
 import { buildSrcdoc } from '../runtime/srcdoc';
 import { saveTemplate } from '../state/projects';
 import type { ProjectFile } from '../types';
@@ -14,6 +19,10 @@ interface Props {
   isDeck?: boolean;
   onExportAsPptx?: ((fileName: string) => void) | undefined;
   streaming?: boolean;
+  // Canvas size advertised by the active skill (e.g. 1080×1080 for
+  // social-post-square). Forwarded to the PNG exporter so artifacts
+  // rasterise at the size the skill targeted, not the iframe's CSS box.
+  exportDimensions?: { width: number; height: number };
 }
 
 export function FileViewer({
@@ -23,6 +32,7 @@ export function FileViewer({
   isDeck,
   onExportAsPptx,
   streaming,
+  exportDimensions,
 }: Props) {
   if (file.kind === 'html') {
     return (
@@ -33,6 +43,7 @@ export function FileViewer({
         isDeck={Boolean(isDeck)}
         onExportAsPptx={onExportAsPptx}
         streaming={Boolean(streaming)}
+        exportDimensions={exportDimensions}
       />
     );
   }
@@ -98,6 +109,7 @@ function HtmlViewer({
   isDeck,
   onExportAsPptx,
   streaming,
+  exportDimensions,
 }: {
   projectId: string;
   file: ProjectFile;
@@ -105,6 +117,7 @@ function HtmlViewer({
   isDeck: boolean;
   onExportAsPptx?: ((fileName: string) => void) | undefined;
   streaming: boolean;
+  exportDimensions?: { width: number; height: number };
 }) {
   const t = useT();
   const [mode, setMode] = useState<'preview' | 'source'>('preview');
@@ -112,6 +125,7 @@ function HtmlViewer({
   const [zoom, setZoom] = useState(100);
   const [presentMenuOpen, setPresentMenuOpen] = useState(false);
   const [shareMenuOpen, setShareMenuOpen] = useState(false);
+  const [pngBusy, setPngBusy] = useState(false);
   // Template save UX. We surface a transient "Saved" pill in the share
   // menu so the user gets feedback without a noisy toast layer.
   const [savingTemplate, setSavingTemplate] = useState(false);
@@ -543,6 +557,31 @@ function HtmlViewer({
                     <span>{t('fileViewer.exportPptx') + '…'}</span>
                   </button>
                   <div className="share-menu-divider" />
+                  <button
+                    type="button"
+                    className="share-menu-item"
+                    role="menuitem"
+                    disabled={pngBusy || !source}
+                    onClick={async () => {
+                      if (!source || pngBusy) return;
+                      setShareMenuOpen(false);
+                      setPngBusy(true);
+                      try {
+                        await exportAsPng(source, exportTitle, {
+                          sourceIframe: iframeRef.current,
+                          width: exportDimensions?.width,
+                          height: exportDimensions?.height,
+                        });
+                      } finally {
+                        setPngBusy(false);
+                      }
+                    }}
+                  >
+                    <span className="share-menu-icon"><Icon name="image" size={14} /></span>
+                    <span>
+                      {pngBusy ? t('common.exportPngBusy') : t('fileViewer.exportPng')}
+                    </span>
+                  </button>
                   <button
                     type="button"
                     className="share-menu-item"

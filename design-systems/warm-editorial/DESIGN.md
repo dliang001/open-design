@@ -1,6 +1,20 @@
+---
+category: Starter
+description: A serif-led magazine aesthetic. Terracotta accent on warm off-white paper — good for long-form, editorial, and brand-led marketing pages.
+tags:
+  - editorial
+  - magazine
+  - serif
+  - warm
+  - long-form
+  - brand
+era: timeless
+mood: warm
+primary_color: "#C0512F"
+---
+
 # Warm Editorial
 
-> Category: Starter
 > A serif-led magazine aesthetic. Terracotta accent on warm off-white paper —
 > good for long-form, editorial, and brand-led marketing pages.
 

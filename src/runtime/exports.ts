@@ -1,9 +1,12 @@
 // Client-side export helpers used by the Share menu in the HTML viewer.
-// Three of the four formats run entirely in the browser:
+// Four of the five formats run entirely in the browser:
 //   - PDF  : open the artifact in a popup window and trigger window.print().
 //            The user picks "Save as PDF" from the system print dialog.
 //   - HTML : download the artifact as a single .html file via a Blob URL.
 //   - ZIP  : pack the artifact into a stored-mode ZIP (see ./zip.ts).
+//   - PNG  : render the artifact in an off-screen iframe and capture it via
+//            html2canvas. Useful for posters, social posts, business cards
+//            — anywhere the deliverable is a flat raster image.
 // PPTX export is fundamentally different — it asks the agent to convert the
 // artifact server-side, so it lives in ProjectView.tsx (not here).
 
@@ -140,4 +143,142 @@ function injectDeckPrintStylesheet(doc: string): string {
   if (/<\/head>/i.test(doc)) return doc.replace(/<\/head>/i, `${tag}</head>`);
   if (/<head[^>]*>/i.test(doc)) return doc.replace(/<head[^>]*>/i, (m) => `${m}${tag}`);
   return tag + doc;
+}
+
+// Snapshot an artifact into a PNG via html2canvas.
+//
+// Two capture paths:
+//   1. `opts.sourceIframe` provided — capture from an iframe that's already
+//      mounted in the DOM (the live preview the user is looking at). This
+//      is the fast path: no extra render, the PNG exactly matches what
+//      they see. Requires the iframe's sandbox to include
+//      `allow-same-origin` so we can read its document.
+//   2. No `sourceIframe` — render `html` into a temporary off-screen
+//      iframe and capture from there. Used by code paths that don't have
+//      a live iframe handy, or when the live iframe is sandboxed without
+//      same-origin access.
+//
+// `width` / `height` default to 1280×800 (a generic laptop hero crop) but
+// callers should pass the artifact's intended canvas size whenever the
+// skill declares one (skills like social-post-square ship dimensions in
+// their SKILL.md frontmatter; FileViewer / PreviewModal forward them).
+//
+// `scale` controls device-pixel ratio. Default 2 produces ~retina output;
+// pass 1 if file size matters more than fidelity.
+export async function exportAsPng(
+  html: string,
+  title: string,
+  opts?: {
+    width?: number;
+    height?: number;
+    scale?: number;
+    backgroundColor?: string;
+    sourceIframe?: HTMLIFrameElement | null;
+  },
+): Promise<void> {
+  const scale = opts?.scale ?? Math.min(2, window.devicePixelRatio || 1);
+  const backgroundColor = opts?.backgroundColor ?? '#ffffff';
+
+  const live = opts?.sourceIframe;
+  // Try the live-iframe path first when one was passed in. If it's present
+  // but blocked by sandbox restrictions (no same-origin access), fall back
+  // to the off-screen render so the export still succeeds.
+  if (live && canReadIframeDocument(live)) {
+    const liveDoc = live.contentDocument!;
+    const rect = live.getBoundingClientRect();
+    // The skill's intended canvas wins. If neither width/height nor the
+    // iframe rect give us a size, we fall back to defaults.
+    const width = opts?.width ?? (Math.round(rect.width) || 1280);
+    const height = opts?.height ?? (Math.round(rect.height) || 800);
+    await captureAndDownload(liveDoc.documentElement, title, {
+      width,
+      height,
+      scale,
+      backgroundColor,
+    });
+    return;
+  }
+
+  const width = opts?.width ?? 1280;
+  const height = opts?.height ?? 800;
+  const iframe = document.createElement('iframe');
+  iframe.style.position = 'fixed';
+  iframe.style.left = '-99999px';
+  iframe.style.top = '0';
+  iframe.style.width = `${width}px`;
+  iframe.style.height = `${height}px`;
+  iframe.style.border = '0';
+  iframe.setAttribute('aria-hidden', 'true');
+  // We need same-origin to walk the iframe's document tree, plus scripts
+  // for skills that lay out via JS (decks, tab strips, etc.).
+  iframe.setAttribute('sandbox', 'allow-same-origin allow-scripts');
+  iframe.srcdoc = buildSrcdoc(html);
+  document.body.appendChild(iframe);
+
+  try {
+    await new Promise<void>((resolve) => {
+      let done = false;
+      const finish = () => {
+        if (done) return;
+        done = true;
+        resolve();
+      };
+      iframe.addEventListener('load', finish, { once: true });
+      // Safety: never hang the UI if `load` doesn't fire (some skills
+      // never resolve their image loads on a hidden iframe).
+      setTimeout(finish, 5000);
+    });
+    // One extra tick so fonts/images settle after `load` fires.
+    await new Promise((r) => setTimeout(r, 250));
+
+    const doc = iframe.contentDocument;
+    if (!doc) throw new Error('PNG export: iframe document unavailable');
+    await captureAndDownload(doc.documentElement, title, {
+      width,
+      height,
+      scale,
+      backgroundColor,
+    });
+  } finally {
+    iframe.remove();
+  }
+}
+
+// Cross-origin / sandbox restrictions throw on any access to
+// `contentDocument`. We probe with a try-catch so callers can fall back
+// to the off-screen render path silently when a live iframe is unreadable.
+function canReadIframeDocument(iframe: HTMLIFrameElement): boolean {
+  try {
+    return Boolean(iframe.contentDocument && iframe.contentDocument.documentElement);
+  } catch {
+    return false;
+  }
+}
+
+async function captureAndDownload(
+  target: HTMLElement,
+  title: string,
+  opts: { width: number; height: number; scale: number; backgroundColor: string },
+): Promise<void> {
+  const html2canvasMod = await import('html2canvas');
+  const html2canvas = html2canvasMod.default;
+  const canvas = await html2canvas(target, {
+    width: opts.width,
+    height: opts.height,
+    windowWidth: opts.width,
+    windowHeight: opts.height,
+    backgroundColor: opts.backgroundColor,
+    useCORS: true,
+    allowTaint: false,
+    scale: opts.scale,
+    logging: false,
+  });
+
+  const blob: Blob = await new Promise((resolve, reject) => {
+    canvas.toBlob((b) => {
+      if (b) resolve(b);
+      else reject(new Error('PNG export: canvas.toBlob returned null'));
+    }, 'image/png');
+  });
+  triggerDownload(blob, `${safeFilename(title, 'artifact')}.png`);
 }

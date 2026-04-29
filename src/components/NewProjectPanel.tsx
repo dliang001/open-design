@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useT } from '../i18n';
 import type { Dict } from '../i18n/types';
+import {
+  DESIGN_DIRECTIONS,
+  type DesignDirection,
+} from '../prompts/directions';
 import type {
   DesignSystemSummary,
   ProjectKind,
@@ -54,6 +58,14 @@ export function NewProjectPanel({
   // duplicating state. Single-select coerces to length 0/1.
   const [selectedDsIds, setSelectedDsIds] = useState<string[]>([]);
   const [dsMulti, setDsMulti] = useState(false);
+  // Visual direction selection — mutually exclusive with the DS picker.
+  // Picking a direction clears DS and vice versa, so the agent never
+  // receives a conflicting "brand says one thing, direction says another"
+  // pair. Null means the user is going with the DS picker (or freeform).
+  const [selectedDirectionId, setSelectedDirectionId] = useState<string | null>(
+    null,
+  );
+  const [directionPickerOpen, setDirectionPickerOpen] = useState(false);
 
   // Per-tab metadata. Tracked independently so switching tabs preserves
   // each tab's pick rather than resetting to defaults.
@@ -114,6 +126,11 @@ export function NewProjectPanel({
       templateId,
       templates,
       inspirationIds: inspirations,
+      // A direction only takes effect when no DS was picked — the DS
+      // picker always wins because brand-led briefs are the more common
+      // path. Stripping the directionId here also keeps stale picks from
+      // sneaking into metadata if the user toggled DS back on.
+      directionId: primaryDs ? null : selectedDirectionId,
     });
     onCreate({
       name: name.trim() || autoName(tab, t),
@@ -154,8 +171,29 @@ export function NewProjectPanel({
           selectedIds={selectedDsIds}
           multi={dsMulti}
           onChangeMulti={setDsMulti}
-          onChange={setSelectedDsIds}
+          onChange={(ids) => {
+            setSelectedDsIds(ids);
+            // Picking a brand wins; drop any direction the user had
+            // tentatively selected so the metadata doesn't ship both.
+            if (ids.length > 0) {
+              setSelectedDirectionId(null);
+              setDirectionPickerOpen(false);
+            }
+          }}
           loading={loading}
+        />
+        <DirectionPicker
+          open={directionPickerOpen}
+          onToggleOpen={() => setDirectionPickerOpen((v) => !v)}
+          selectedId={selectedDirectionId}
+          dsSelected={selectedDsIds.length > 0}
+          onSelect={(id) => {
+            setSelectedDirectionId(id);
+            // Direction is mutually exclusive with the DS picker — clear
+            // the DS array so the metadata only carries one signal.
+            setSelectedDsIds([]);
+          }}
+          onClear={() => setSelectedDirectionId(null)}
         />
 
         {tab === 'prototype' ? (
@@ -735,6 +773,138 @@ function DesignSystemAvatar({
   );
 }
 
+// Inline picker for the 5 curated visual directions, shown below the DS
+// picker. The DS picker handles the brand-led path; this is the
+// no-brand-just-a-direction path. Mutually exclusive with DS selection
+// (the parent enforces this on each callback). Cards mirror the look
+// of the `direction-cards` question-form rendering so the two surfaces
+// feel consistent.
+function DirectionPicker({
+  open,
+  onToggleOpen,
+  selectedId,
+  dsSelected,
+  onSelect,
+  onClear,
+}: {
+  open: boolean;
+  onToggleOpen: () => void;
+  selectedId: string | null;
+  dsSelected: boolean;
+  onSelect: (id: string) => void;
+  onClear: () => void;
+}) {
+  const t = useT();
+  const selected = selectedId
+    ? DESIGN_DIRECTIONS.find((d) => d.id === selectedId) ?? null
+    : null;
+  return (
+    <div className="newproj-section direction-picker">
+      <button
+        type="button"
+        className={`direction-toggle${open ? ' open' : ''}`}
+        onClick={onToggleOpen}
+        aria-expanded={open}
+      >
+        <span className="direction-toggle-label">
+          {selected
+            ? t('newproj.directionSelected', { label: selected.label })
+            : dsSelected
+              ? t('newproj.directionTitleDsActive')
+              : t('newproj.directionTitle')}
+        </span>
+        <Icon
+          name="chevron-down"
+          size={12}
+          className="direction-toggle-chevron"
+          style={{ transform: open ? 'rotate(180deg)' : undefined }}
+        />
+      </button>
+      {open ? (
+        <>
+          <div className="direction-grid" role="radiogroup" aria-label={t('newproj.directionTitle')}>
+            {DESIGN_DIRECTIONS.map((d) => (
+              <DirectionCard
+                key={d.id}
+                direction={d}
+                active={selectedId === d.id}
+                onSelect={() => onSelect(d.id)}
+              />
+            ))}
+          </div>
+          {selectedId ? (
+            <button
+              type="button"
+              className="direction-clear"
+              onClick={onClear}
+            >
+              {t('newproj.directionClear')}
+            </button>
+          ) : null}
+        </>
+      ) : null}
+    </div>
+  );
+}
+
+function DirectionCard({
+  direction,
+  active,
+  onSelect,
+}: {
+  direction: DesignDirection;
+  active: boolean;
+  onSelect: () => void;
+}) {
+  // Order picked to mirror the `direction-cards` form palette layout:
+  // bg / surface / border / muted / fg / accent — gives the user a feel
+  // for the hierarchy at a glance.
+  const swatches = [
+    direction.palette.bg,
+    direction.palette.surface,
+    direction.palette.border,
+    direction.palette.muted,
+    direction.palette.fg,
+    direction.palette.accent,
+  ];
+  return (
+    <button
+      type="button"
+      role="radio"
+      aria-checked={active}
+      className={`direction-card${active ? ' active' : ''}`}
+      onClick={onSelect}
+    >
+      <div className="direction-card-swatches" aria-hidden>
+        {swatches.map((c, i) => (
+          <span
+            key={i}
+            className="direction-card-swatch"
+            style={{ background: c }}
+            title={c}
+          />
+        ))}
+      </div>
+      <div className="direction-card-meta">
+        <div className="direction-card-label">{direction.label}</div>
+        <div className="direction-card-mood">{direction.mood}</div>
+        <div
+          className="direction-card-type"
+          // Inline so the actual picked font renders. Falls back to the
+          // body stack at small sizes — display fonts often need ≥24px to
+          // read as themselves.
+          style={{ fontFamily: direction.bodyFont }}
+        >
+          <span style={{ fontFamily: direction.displayFont }}>Aa</span>
+          <span className="direction-card-type-sample">
+            The quick brown fox
+          </span>
+        </div>
+      </div>
+    </button>
+  );
+}
+
 function NoneAvatar() {
   return (
     <span className="ds-avatar ds-avatar-none" aria-hidden>
@@ -771,20 +941,24 @@ function buildMetadata(input: {
   templateId: string | null;
   templates: ProjectTemplate[];
   inspirationIds: string[];
+  directionId: string | null;
 }): ProjectMetadata {
   const kind: ProjectKind = input.tab;
   const inspirations = input.inspirationIds.length > 0
     ? { inspirationDesignSystemIds: input.inspirationIds }
     : {};
+  const direction = input.directionId
+    ? { directionId: input.directionId }
+    : {};
   if (input.tab === 'prototype') {
-    return { kind, fidelity: input.fidelity, ...inspirations };
+    return { kind, fidelity: input.fidelity, ...inspirations, ...direction };
   }
   if (input.tab === 'deck') {
-    return { kind, speakerNotes: input.speakerNotes, ...inspirations };
+    return { kind, speakerNotes: input.speakerNotes, ...inspirations, ...direction };
   }
   if (input.tab === 'template') {
     if (input.templateId == null) {
-      return { kind, animations: input.animations, ...inspirations };
+      return { kind, animations: input.animations, ...inspirations, ...direction };
     }
     const tpl = input.templates.find((x) => x.id === input.templateId);
     // The fallback label is consumed by the agent prompt rather than the
@@ -797,7 +971,7 @@ function buildMetadata(input: {
       ...inspirations,
     };
   }
-  return { kind: 'other', ...inspirations };
+  return { kind: 'other', ...inspirations, ...direction };
 }
 
 function titleForTab(tab: CreateTab, t: TranslateFn): string {
