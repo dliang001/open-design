@@ -143,8 +143,12 @@ function extractSwatches(raw) {
     seen.add(key);
     colors.push({ name: cleanName, value: v });
   }
-  // Form A: "- **Background:** `#FAFAFA`"
-  const reA = /^[\s>*-]*\**\s*([A-Za-z][A-Za-z0-9 /&()+_-]{1,40}?)\s*\**\s*[:：]\s*`?(#[0-9a-fA-F]{3,8})/gm;
+  // Form A: bullet-style "- **Background:** `#FAFAFA`" or
+  //         "- Dark-mode-native: `#08090a`". The `(?:\*\*\s*[:：]|[:：]\s*\*\*)`
+  //         alternation accepts the colon inside OR outside the closing
+  //         bold marker so files that use either convention parse the
+  //         same way.
+  const reA = /^[\s>*-]*\**\s*([A-Za-z][A-Za-z0-9 /&()+_-]{1,40}?)(?:\**\s*[:：]|[:：]\s*\**)\s*`?(#[0-9a-fA-F]{3,8})/gm;
   let m;
   while ((m = reA.exec(raw)) !== null) push(m[1], m[2]);
   // Form B: "**Stripe Purple** (`#533afd`)"
