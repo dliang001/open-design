@@ -252,7 +252,7 @@ Every layer is composable. Every layer is a file you can edit. Read [`src/prompt
 | Agent transport | `child_process.spawn` with `claude-stream-json` parser for Claude Code, line-buffered plain stdout for the rest |
 | Storage | Plain files in `.od/projects/<id>/` + SQLite at `.od/db.sqlite` (gitignored) |
 | Preview | Sandboxed iframe via `srcdoc` + per-skill `<artifact>` parser |
-| Export | HTML (inline assets) · PDF (browser print) · PPTX (skill-defined) · ZIP (archiver) |
+| Export | HTML (inline assets) · PDF (browser print + injected universal `@media print`) · PPTX (`pptxgenjs`, dynamic-imported, ~127 KB gzip) · ZIP (stored-mode archiver) — all client-side |
 
 ## Quickstart
 
@@ -330,7 +330,8 @@ open-design/
 │   ├── runtime/
 │   │   ├── srcdoc.ts              ← iframe sandbox wrapper
 │   │   ├── markdown.tsx           ← assistant message renderer
-│   │   ├── exports.ts             ← HTML / PDF / ZIP export helpers
+│   │   ├── exports.ts             ← HTML / PDF / ZIP export helpers (re-exports pptx)
+│   │   ├── pptx.ts                ← PPTX export via pptxgenjs (dynamic import)
 │   │   └── zip.ts                 ← project archive
 │   ├── providers/
 │   │   ├── daemon.ts              ← /api/chat SSE stream consumer

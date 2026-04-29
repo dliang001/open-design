@@ -51,6 +51,18 @@ export interface ComposeInput {
   // Snapshot of HTML files that the agent should treat as a starting
   // reference rather than a fixed deliverable.
   template?: ProjectTemplate | undefined;
+  // True when the caller is the in-browser BYOK pipeline (anthropic.ts).
+  // That path passes NO `tools` parameter to `messages.stream`, so the
+  // workflow rules earlier in this prompt — Read/Write/Bash/TodoWrite,
+  // discovery <question-form>, "Pre-flight: read assets/template.html",
+  // checklist self-check, etc. — all assume tool calls that won't happen.
+  // Smarter models silently skip the tool steps and emit `<artifact>`
+  // directly; weaker ones (notably DeepSeek) hallucinate text-shaped tool
+  // calls (`<tool_call name="TodoWrite">…`) and run out of output budget
+  // before reaching the artifact. The block appended at the end of the
+  // composed prompt overrides that workflow with a "no tools, emit
+  // directly" rule that wins by virtue of being last.
+  apiMode?: boolean | undefined;
 }
 
 export function composeSystemPrompt({
@@ -61,6 +73,7 @@ export function composeSystemPrompt({
   designSystemTitle,
   metadata,
   template,
+  apiMode,
 }: ComposeInput): string {
   // Discovery + philosophy goes FIRST so its hard rules ("emit a form on
   // turn 1", "branch on brand on turn 2", "TodoWrite on turn 3", run
@@ -111,8 +124,42 @@ export function composeSystemPrompt({
     parts.push(`\n\n---\n\n${DECK_FRAMEWORK_DIRECTIVE}`);
   }
 
+  // API-mode override goes LAST so it wins over the workflow earlier in
+  // the prompt. This is load-bearing for non-Anthropic providers — see
+  // the note on `apiMode` in `ComposeInput` for why.
+  if (apiMode) {
+    parts.push(`\n\n---\n\n${API_MODE_OVERRIDE}`);
+  }
+
   return parts.join('');
 }
+
+// Hard override pinned at the very end of the prompt when the caller is
+// the BYOK browser pipeline. The discovery + workflow sections earlier
+// in the stack assume the agent has Read/Write/Bash/TodoWrite — true in
+// daemon mode, false in API mode. Without this override, weaker models
+// emit text-shaped tool calls and run out of output budget before the
+// `<artifact>` block, leaving the right-hand pane empty.
+const API_MODE_OVERRIDE = `# CRITICAL — direct emission mode (no tools available)
+
+You are running in browser API mode and have **no tools available** for this turn. None of the workflow steps above that assume Read/Write/Edit/Bash/Glob/Grep/TodoWrite/WebFetch will execute — the host did not register any tools with the API call.
+
+**Do NOT emit any of the following — they have no effect, get rendered as raw text, and waste output budget:**
+- \`<tool_call name="...">...\` blocks
+- \`<OD-tool name="...">...\` blocks
+- \`<function_call>\` / \`<function_calls>\` blocks
+- Pseudocode like \`TodoWrite({ todos: [...] })\` or \`Read(path="...")\` written as text
+- Any pre-flight "Read assets/template.html" / "Read references/checklist.md" step — you cannot read files, the seed and references are not on the wire
+
+**Your entire turn must be exactly:**
+1. (Optional) one short paragraph of plain prose stating the design move you'll take — palette choice, layout strategy, what each section does. Keep it under ~120 words. No bullet checklists.
+2. The single final \`<artifact identifier="kebab-slug" type="text/html" title="Human-readable title">\`…complete \`<!doctype html>\` document…\`</artifact>\` block. The HTML must be fully self-contained: inline all CSS, no external CSS files, no external JS unless explicitly pinned per the React/Babel section.
+
+After \`</artifact>\`, stop. Do NOT narrate what you produced. Do NOT wrap the artifact in markdown code fences. The artifact tag is the deliverable — anything outside it is just preamble.
+
+If the prior turn was a question-form answer, jump straight to the prose-then-artifact pattern. The "self-check" / "5-dim critique" / TodoWrite-progress phases described earlier are non-applicable in this mode; do them silently in your head if you must, but do not emit them.
+
+Reserve your output budget for the artifact itself — a real prototype / deck / dashboard often needs 15K+ tokens of HTML. Don't burn it on planning text.`;
 
 function renderMetadataBlock(
   metadata: ProjectMetadata | undefined,

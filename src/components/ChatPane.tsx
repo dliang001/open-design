@@ -14,31 +14,44 @@ type TranslateFn = (key: keyof Dict, vars?: Record<string, string | number>) => 
 // Each prompt is intentionally dense — it should showcase ambitious
 // layout, typographic, and information-design moves rather than a
 // generic landing page.
-const EXAMPLE_PROMPT_KEYS: Array<{
+//
+// Examples are keyed by project kind so a `prototype` project surfaces
+// app/dashboard/landing-page starters, a `deck` project surfaces
+// pitch/QBR/keynote starters, and a `template` project surfaces
+// editorial/blog/business-document starters. Anything else falls back
+// to the prototype set.
+type ExampleKind = 'prototype' | 'deck' | 'template';
+
+interface ExampleCard {
   icon: string;
   titleKey: keyof Dict;
   tagKey: keyof Dict;
   promptKey: keyof Dict;
-}> = [
-  {
-    icon: '▤',
-    titleKey: 'chat.example1Title',
-    tagKey: 'chat.example1Tag',
-    promptKey: 'chat.example1Prompt',
-  },
-  {
-    icon: '▦',
-    titleKey: 'chat.example2Title',
-    tagKey: 'chat.example2Tag',
-    promptKey: 'chat.example2Prompt',
-  },
-  {
-    icon: '◈',
-    titleKey: 'chat.example3Title',
-    tagKey: 'chat.example3Tag',
-    promptKey: 'chat.example3Prompt',
-  },
-];
+}
+
+const EXAMPLES_BY_KIND: Record<ExampleKind, ExampleCard[]> = {
+  prototype: [
+    { icon: '◰', titleKey: 'chat.example.prototype.1.title', tagKey: 'chat.example.prototype.1.tag', promptKey: 'chat.example.prototype.1.prompt' },
+    { icon: '▦', titleKey: 'chat.example.prototype.2.title', tagKey: 'chat.example.prototype.2.tag', promptKey: 'chat.example.prototype.2.prompt' },
+    { icon: '◧', titleKey: 'chat.example.prototype.3.title', tagKey: 'chat.example.prototype.3.tag', promptKey: 'chat.example.prototype.3.prompt' },
+  ],
+  deck: [
+    { icon: '▤', titleKey: 'chat.example.deck.1.title', tagKey: 'chat.example.deck.1.tag', promptKey: 'chat.example.deck.1.prompt' },
+    { icon: '◈', titleKey: 'chat.example.deck.2.title', tagKey: 'chat.example.deck.2.tag', promptKey: 'chat.example.deck.2.prompt' },
+    { icon: '◇', titleKey: 'chat.example.deck.3.title', tagKey: 'chat.example.deck.3.tag', promptKey: 'chat.example.deck.3.prompt' },
+  ],
+  template: [
+    { icon: '☱', titleKey: 'chat.example.template.1.title', tagKey: 'chat.example.template.1.tag', promptKey: 'chat.example.template.1.prompt' },
+    { icon: '☲', titleKey: 'chat.example.template.2.title', tagKey: 'chat.example.template.2.tag', promptKey: 'chat.example.template.2.prompt' },
+    { icon: '☳', titleKey: 'chat.example.template.3.title', tagKey: 'chat.example.template.3.tag', promptKey: 'chat.example.template.3.prompt' },
+  ],
+};
+
+function pickExamples(kind: string | undefined): ExampleCard[] {
+  if (kind === 'deck') return EXAMPLES_BY_KIND.deck;
+  if (kind === 'template') return EXAMPLES_BY_KIND.template;
+  return EXAMPLES_BY_KIND.prototype;
+}
 
 interface Props {
   messages: ChatMessage[];
@@ -73,6 +86,9 @@ interface Props {
   // Composer settings/CLI button forwards to here. The dialog lives in App
   // (it owns the AppConfig lifecycle) so we just pass the open trigger.
   onOpenSettings?: () => void;
+  // Project kind drives which example starter prompts the empty chat
+  // shows. Falls back to the prototype set when undefined or 'other'.
+  projectKind?: 'prototype' | 'deck' | 'template' | 'other';
 }
 
 type Tab = 'chat' | 'comments';
@@ -97,6 +113,7 @@ export function ChatPane({
   onDeleteConversation,
   onRenameConversation,
   onOpenSettings,
+  projectKind,
 }: Props) {
   const t = useT();
   const logRef = useRef<HTMLDivElement | null>(null);
@@ -295,7 +312,7 @@ export function ChatPane({
                     </span>
                   </div>
                   <div className="chat-examples" role="list">
-                    {EXAMPLE_PROMPT_KEYS.map((ex, i) => {
+                    {pickExamples(projectKind).map((ex, i) => {
                       const title = t(ex.titleKey);
                       const tag = t(ex.tagKey);
                       const prompt = t(ex.promptKey);

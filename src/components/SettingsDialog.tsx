@@ -272,54 +272,64 @@ export function SettingsDialog({
                 </button>
               </div>
             </label>
+            {/* Model picker is a real <select> so users immediately see
+                every preset model. Choosing "Custom…" reveals a text
+                input that accepts any model id (the previous datalist
+                pattern looked like a plain text box and hid the other
+                presets behind a non-obvious dropdown gesture). */}
             <label className="field">
               <span className="field-label">{t('settings.model')}</span>
-              <input
-                type="text"
-                value={cfg.model}
-                list="suggested-models"
-                onChange={(e) => setCfg({ ...cfg, model: e.target.value })}
-              />
-              <datalist id="suggested-models">
-                {suggestedModels.map((m) => (
-                  <option value={m} key={m} />
-                ))}
-              </datalist>
-              {suggestedModels.length > 0 ? (
-                <div
-                  style={{
-                    display: 'flex',
-                    flexWrap: 'wrap',
-                    gap: 6,
-                    marginTop: 6,
-                  }}
-                >
-                  {suggestedModels.map((m) => {
-                    const active = cfg.model === m;
-                    return (
-                      <button
-                        key={m}
-                        type="button"
-                        onClick={() => setCfg({ ...cfg, model: m })}
-                        aria-pressed={active}
-                        style={{
-                          padding: '4px 10px',
-                          borderRadius: 999,
-                          fontSize: 12,
-                          lineHeight: 1.4,
-                          border: '1px solid var(--border-soft)',
-                          background: active ? 'var(--accent-soft, #f6e9e0)' : 'transparent',
-                          color: active ? 'var(--text)' : 'var(--text-muted)',
-                          fontWeight: active ? 600 : 500,
-                          cursor: 'pointer',
-                        }}
-                      >
-                        {m}
-                      </button>
-                    );
-                  })}
-                </div>
-              ) : null}
+              {(() => {
+                const isCustomModel =
+                  suggestedModels.length > 0 &&
+                  !suggestedModels.includes(cfg.model);
+                return (
+                  <>
+                    <select
+                      value={
+                        suggestedModels.length === 0
+                          ? '__custom__'
+                          : isCustomModel
+                            ? '__custom__'
+                            : cfg.model
+                      }
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        if (v === '__custom__') {
+                          // Switching from a preset to custom: blank the
+                          // model so the user types a fresh value rather
+                          // than carrying the preset id forward.
+                          setCfg({
+                            ...cfg,
+                            model: isCustomModel ? cfg.model : '',
+                          });
+                        } else {
+                          setCfg({ ...cfg, model: v });
+                        }
+                      }}
+                    >
+                      {suggestedModels.map((m) => (
+                        <option value={m} key={m}>
+                          {m}
+                        </option>
+                      ))}
+                      <option value="__custom__">
+                        {t('settings.modelCustomOption')}
+                      </option>
+                    </select>
+                    {(isCustomModel || suggestedModels.length === 0) && (
+                      <input
+                        type="text"
+                        value={cfg.model}
+                        placeholder={t('settings.modelCustomPlaceholder')}
+                        onChange={(e) =>
+                          setCfg({ ...cfg, model: e.target.value })
+                        }
+                      />
+                    )}
+                  </>
+                );
+              })()}
             </label>
             <label className="field">
               <span className="field-label">{t('settings.baseUrl')}</span>

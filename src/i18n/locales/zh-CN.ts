@@ -71,6 +71,8 @@ export const zhCN: Dict = {
   'settings.show': '显示',
   'settings.hide': '隐藏',
   'settings.model': '模型',
+  'settings.modelCustomOption': '自定义…',
+  'settings.modelCustomPlaceholder': '输入模型 ID（如 my-custom-model）',
   'settings.baseUrl': 'Base URL',
   'settings.apiHint':
     '请求会从当前浏览器直连你设置的 Base URL，无中转代理。Key 只存放在 localStorage。',
@@ -256,18 +258,47 @@ export const zhCN: Dict = {
   'chat.send': '发送',
   'chat.stop': '停止',
   'chat.removeAria': '移除 {name}',
-  'chat.example1Title': '编辑风路演 PPT',
-  'chat.example1Tag': '杂志',
-  'chat.example1Prompt':
-    '为一家正在融种子轮的设计工作室制作 10 张编辑风路演 PPT —— 瑞士网格布局，超大号衬线标题加粗体首字下沉，等宽字体的章节编号，留白充足，整页大图与文字密集页穿插出现。封面、愿景、市场、产品、增长、团队、融资诉求、联系方式。',
-  'chat.example2Title': 'SaaS 分析仪表盘',
-  'chat.example2Tag': '数据',
-  'chat.example2Prompt':
+  // prototype 类（原型）：移动 App、数据仪表盘、营销落地页
+  'chat.example.prototype.1.title': '移动健身 App',
+  'chat.example.prototype.1.tag': '移动',
+  'chat.example.prototype.1.prompt':
+    '为一款主打习惯养成的移动健身 App 设计核心三屏 —— 每日打卡卡片（连击日历、心率环形图、今日训练摘要）、训练详情页（动作分解步骤、组次计时器、过往最佳成绩对比）、周复盘页（睡眠/训练/恢复堆叠柱状图、教练点评卡片、下周目标）。深色主题、活力色点缀、卡片化布局。',
+  'chat.example.prototype.2.title': 'SaaS 分析仪表盘',
+  'chat.example.prototype.2.tag': '数据',
+  'chat.example.prototype.2.prompt':
     '为一款面向开发者的 SaaS 设计一份信息密度高的分析仪表盘 —— 顶部 KPI 条带（含周环比变化）、两张堆叠折线图（MRR 与活跃工作区）、全球使用热力图、留存矩阵、客户排行榜以及实时事件流。深色主题，等宽数字，迷你图作为点缀。',
-  'chat.example3Title': '长滚动年度报告',
-  'chat.example3Tag': '编辑',
-  'chat.example3Prompt':
+  'chat.example.prototype.3.title': 'AI 笔记落地页',
+  'chat.example.prototype.3.tag': '营销',
+  'chat.example.prototype.3.prompt':
+    '为一款 AI 笔记产品设计长滚动营销落地页 —— 英雄区（动态打字效果标题、产品截图悬浮）、痛点对照（旧方式 vs 新方式分栏）、四个核心功能演示（每个含 GIF 与代码片段示例）、社会证明（Logo 墙 + 用户引言卡片）、定价对比表、底部 CTA 区。现代无衬线字体、克制的渐变作为点缀。',
+
+  // deck 类（幻灯片）：路演 PPT、季度回顾、产品发布
+  'chat.example.deck.1.title': '编辑风路演 PPT',
+  'chat.example.deck.1.tag': '杂志',
+  'chat.example.deck.1.prompt':
+    '为一家正在融种子轮的设计工作室制作 10 张编辑风路演 PPT —— 瑞士网格布局，超大号衬线标题加粗体首字下沉，等宽字体的章节编号，留白充足，整页大图与文字密集页穿插出现。封面、愿景、市场、产品、增长、团队、融资诉求、联系方式。',
+  'chat.example.deck.2.title': '季度业务回顾',
+  'chat.example.deck.2.tag': '数据',
+  'chat.example.deck.2.prompt':
+    '为一家 SaaS 公司制作 Q3 业务回顾幻灯片，共 12 张 —— 摘要看板、ARR 增长瀑布图、新增/流失客户画像、产品里程碑时间线、用户研究关键洞察、竞品动态、风险与缓解、Q4 优先级、资源需求与团队招聘、致谢页。深色商务主题，数字采用等宽字体，每页右下角带页码与水印。',
+  'chat.example.deck.3.title': '产品发布主题演讲',
+  'chat.example.deck.3.tag': '发布会',
+  'chat.example.deck.3.prompt':
+    '为一款专业摄影产品的发布会做 8 张主题演讲式幻灯片 —— 每张以一张全屏大图打底，叠加一句极简标题（如「For the unrepeatable moment.」），关键参数用细线分隔横向列出，过渡页用大字号品牌口号。整体黑白基调，仅在产品图上保留色彩。',
+
+  // template 类（文档/编辑）：年度报告、技术博客、招股书摘要
+  'chat.example.template.1.title': '长滚动年度报告',
+  'chat.example.template.1.tag': '编辑',
+  'chat.example.template.1.prompt':
     '为一家关注气候议题的非营利机构制作互动式年度报告 —— 长滚动编辑式布局，混合大段引言区块、数据可视化（堆叠柱状图、动态计数器、项目地点分布的等值线地图）、摄影分隔页、捐赠者墙，以及最终行动号召。现代衬线正文、无衬线图表标签、大地纸张配色。',
+  'chat.example.template.2.title': '技术博客文章',
+  'chat.example.template.2.tag': '博客',
+  'chat.example.template.2.prompt':
+    '排版一篇深度技术博客《我们如何把构建时间从 14 分钟降到 90 秒》—— 带可点击 TOC 的长引言、章节导航锚点、可折叠的代码片段（含语法高亮）、配图说明、关键概念在侧边栏卡片化展示、文末作者卡片与相关阅读列表。衬线正文、等宽代码字体、克制的强调色。',
+  'chat.example.template.3.title': '招股书摘要',
+  'chat.example.template.3.tag': '商务',
+  'chat.example.template.3.prompt':
+    '为一家清洁能源公司排版招股书 Executive Summary —— 双栏正文与脚注并排，章节首段强调首字下沉，关键财务表格采用斑马纹与右对齐数字，风险章节用警示色块标记，结尾附"使用资金分配"环形图与高管名册。专业衬线字体、纸张色背景、印刷级网格留白。',
 
   'preview.shareMenu': '分享 ▾',
   'preview.openInNewTab': '在新标签页中打开',

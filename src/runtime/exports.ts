@@ -1,14 +1,15 @@
 // Client-side export helpers used by the Share menu in the HTML viewer.
-// Three of the four formats run entirely in the browser:
+// All four formats run entirely in the browser:
 //   - PDF  : open the artifact in a popup window and trigger window.print().
 //            The user picks "Save as PDF" from the system print dialog.
+//   - PPTX : parse the HTML and emit a real .pptx via pptxgenjs (see ./pptx.ts).
 //   - HTML : download the artifact as a single .html file via a Blob URL.
 //   - ZIP  : pack the artifact into a stored-mode ZIP (see ./zip.ts).
-// PPTX export is fundamentally different — it asks the agent to convert the
-// artifact server-side, so it lives in ProjectView.tsx (not here).
 
 import { buildSrcdoc } from './srcdoc';
 import { buildZip } from './zip';
+
+export { exportAsPptx } from './pptx';
 
 function safeFilename(name: string, fallback: string): string {
   const slug = (name || fallback)
@@ -71,6 +72,13 @@ export function exportAsPdf(
   opts?: { deck?: boolean },
 ): void {
   let doc = buildSrcdoc(html);
+  // Universal print rules first — they preserve background colors,
+  // neutralize fixed/sticky overlays, and set a sane default @page.
+  // Without this, dark-themed pages print mostly blank because the
+  // browser strips backgrounds by default.
+  doc = injectUniversalPrintStylesheet(doc);
+  // Deck-specific rules layer on top: they override @page to 1920×1080
+  // and force one slide per page with no margins.
   if (opts?.deck) doc = injectDeckPrintStylesheet(doc);
   doc = injectPrintScript(doc, title);
   const blob = new Blob([doc], { type: 'text/html;charset=utf-8' });
@@ -94,6 +102,51 @@ function injectPrintScript(doc: string, title: string): string {
   if (/<\/head>/i.test(doc)) return doc.replace(/<\/head>/i, `${script}</head>`);
   if (/<\/body>/i.test(doc)) return doc.replace(/<\/body>/i, `${script}</body>`);
   return doc + script;
+}
+
+// Universal @media print rules applied to every PDF export. These solve
+// the "print preview is mostly blank" problem for non-deck artifacts:
+//
+//   1. `print-color-adjust: exact` forces the browser to keep author
+//      backgrounds and dark themes instead of stripping them for ink savings.
+//   2. Common `position: fixed`/`sticky` overlays (sticky headers, modals,
+//      cookie banners) are demoted to `static` so they don't repeat on
+//      every page or eclipse the actual content.
+//   3. `@page { margin: 12mm }` gives readable margins; deck mode resets
+//      this to 0 via the deck-specific stylesheet that ships afterward.
+//   4. `break-inside: avoid-page` on top-level blocks reduces ugly mid-card
+//      page breaks for editorial / dashboard artifacts.
+const UNIVERSAL_PRINT_CSS = `
+@media print {
+  *, *::before, *::after {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
+  }
+  html, body {
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+  }
+  [style*="position: fixed"], [style*="position:fixed"],
+  [style*="position: sticky"], [style*="position:sticky"],
+  .fixed, .sticky,
+  header[class*="sticky"], header[class*="fixed"],
+  nav[class*="sticky"], nav[class*="fixed"] {
+    position: static !important;
+  }
+  .no-print, [data-no-print] { display: none !important; }
+  @page { margin: 12mm; }
+  img, svg, video { max-width: 100% !important; height: auto; }
+  body > *, main, article, section { break-inside: avoid-page; }
+}
+`;
+
+function injectUniversalPrintStylesheet(doc: string): string {
+  const tag = `<style data-print="universal">${UNIVERSAL_PRINT_CSS}</style>`;
+  if (/<\/head>/i.test(doc)) return doc.replace(/<\/head>/i, `${tag}</head>`);
+  if (/<head[^>]*>/i.test(doc)) return doc.replace(/<head[^>]*>/i, (m) => `${m}${tag}`);
+  return tag + doc;
 }
 
 // Stitches every .slide into a vertical multi-page PDF: 1920×1080 per page,

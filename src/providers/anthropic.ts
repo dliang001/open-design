@@ -40,10 +40,16 @@ export async function streamMessage(
   let acc = '';
 
   try {
+    // 32K output budget — a complete dashboard / deck / template HTML
+    // routinely runs 15K–25K tokens once you include inlined CSS and SVG
+    // charts. The previous 8K cap left models (especially DeepSeek) cut
+    // off mid-plan, never reaching the `<artifact>` emission. All current
+    // Claude models support ≥32K output; deepseek-v4-{flash,pro} support
+    // 64K. Pick the lower bound so we don't 400 on either provider.
     const stream = client.messages.stream(
       {
         model: cfg.model,
-        max_tokens: 8192,
+        max_tokens: 32768,
         system,
         messages: history.map((m) => ({ role: m.role, content: m.content })),
       },

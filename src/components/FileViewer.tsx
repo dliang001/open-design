@@ -12,7 +12,7 @@ interface Props {
   file: ProjectFile;
   liveHtml?: string;
   isDeck?: boolean;
-  onExportAsPptx?: ((fileName: string) => void) | undefined;
+  onExportAsPptx?: ((fileName: string) => void | Promise<void>) | undefined;
   streaming?: boolean;
 }
 
@@ -103,7 +103,7 @@ function HtmlViewer({
   file: ProjectFile;
   liveHtml?: string;
   isDeck: boolean;
-  onExportAsPptx?: ((fileName: string) => void) | undefined;
+  onExportAsPptx?: ((fileName: string) => void | Promise<void>) | undefined;
   streaming: boolean;
 }) {
   const t = useT();
@@ -322,7 +322,11 @@ function HtmlViewer({
   const showPresent = effectiveDeck && source !== null;
   const canShare = source !== null;
   const exportTitle = file.name.replace(/\.html?$/i, '') || file.name;
-  const canPptx = canShare && Boolean(onExportAsPptx) && !streaming;
+  // PPTX export is now a pure frontend operation (pptxgenjs) — it no
+  // longer routes through the chat agent, so streaming state is
+  // irrelevant. We still gate on `source` and on the parent providing
+  // an export handler.
+  const canPptx = canShare && Boolean(onExportAsPptx);
   const previewScale = zoom / 100;
 
   return (
@@ -529,14 +533,12 @@ function HtmlViewer({
                     disabled={!canPptx}
                     title={
                       onExportAsPptx
-                        ? streaming
-                          ? t('fileViewer.exportPptxBusy')
-                          : t('fileViewer.exportPptxHint')
+                        ? t('fileViewer.exportPptxHint')
                         : t('fileViewer.exportPptxNa')
                     }
                     onClick={() => {
                       setShareMenuOpen(false);
-                      if (onExportAsPptx) onExportAsPptx(file.name);
+                      if (onExportAsPptx) void onExportAsPptx(file.name);
                     }}
                   >
                     <span className="share-menu-icon"><Icon name="present" size={14} /></span>

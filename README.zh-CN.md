@@ -252,7 +252,7 @@ DISCOVERY 指令         （turn-1 表单、turn-2 品牌分支、TodoWrite、�
 | Agent 传输层 | `child_process.spawn`，Claude Code 走 `claude-stream-json` 解析器，其余走 line-buffered plain stdout |
 | 存储 | 纯文件 `.od/projects/<id>/` + SQLite `.od/app.sqlite`（已 gitignore，daemon 启动自建） |
 | 预览 | 沙盒 iframe（`srcdoc`）+ 每个 skill 的 `<artifact>` parser |
-| 导出 | HTML（内联资源）· PDF（浏览器打印）· PPTX（skill 自定义）· ZIP（archiver） |
+| 导出 | HTML（内联资源）· PDF（浏览器打印 + 注入通用 `@media print`）· PPTX（`pptxgenjs`，动态 import，~127 KB gzip）· ZIP（stored-mode archiver）—— 全部前端实现 |
 
 ## Quickstart
 
@@ -330,7 +330,8 @@ open-design/
 │   ├── runtime/
 │   │   ├── srcdoc.ts              ← iframe 沙盒包装
 │   │   ├── markdown.tsx           ← 助手消息渲染
-│   │   ├── exports.ts             ← HTML / PDF / ZIP 导出
+│   │   ├── exports.ts             ← HTML / PDF / ZIP 导出（re-export pptx）
+│   │   ├── pptx.ts                ← PPTX 导出（pptxgenjs，动态 import）
 │   │   └── zip.ts                 ← 项目打包
 │   ├── providers/
 │   │   ├── daemon.ts              ← /api/chat SSE 流消费者

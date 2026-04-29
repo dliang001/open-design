@@ -83,6 +83,8 @@ export interface Dict {
   'settings.show': string;
   'settings.hide': string;
   'settings.model': string;
+  'settings.modelCustomOption': string;
+  'settings.modelCustomPlaceholder': string;
   'settings.baseUrl': string;
   'settings.apiHint': string;
   'settings.provider': string;
@@ -271,15 +273,36 @@ export interface Dict {
   'chat.send': string;
   'chat.stop': string;
   'chat.removeAria': string;
-  'chat.example1Title': string;
-  'chat.example1Tag': string;
-  'chat.example1Prompt': string;
-  'chat.example2Title': string;
-  'chat.example2Tag': string;
-  'chat.example2Prompt': string;
-  'chat.example3Title': string;
-  'chat.example3Tag': string;
-  'chat.example3Prompt': string;
+  // Empty-state starter prompts shown in the new-conversation pane.
+  // Three sets keyed by project kind so that prototype/deck/template
+  // projects each surface scenario-appropriate examples.
+  'chat.example.prototype.1.title': string;
+  'chat.example.prototype.1.tag': string;
+  'chat.example.prototype.1.prompt': string;
+  'chat.example.prototype.2.title': string;
+  'chat.example.prototype.2.tag': string;
+  'chat.example.prototype.2.prompt': string;
+  'chat.example.prototype.3.title': string;
+  'chat.example.prototype.3.tag': string;
+  'chat.example.prototype.3.prompt': string;
+  'chat.example.deck.1.title': string;
+  'chat.example.deck.1.tag': string;
+  'chat.example.deck.1.prompt': string;
+  'chat.example.deck.2.title': string;
+  'chat.example.deck.2.tag': string;
+  'chat.example.deck.2.prompt': string;
+  'chat.example.deck.3.title': string;
+  'chat.example.deck.3.tag': string;
+  'chat.example.deck.3.prompt': string;
+  'chat.example.template.1.title': string;
+  'chat.example.template.1.tag': string;
+  'chat.example.template.1.prompt': string;
+  'chat.example.template.2.title': string;
+  'chat.example.template.2.tag': string;
+  'chat.example.template.2.prompt': string;
+  'chat.example.template.3.title': string;
+  'chat.example.template.3.tag': string;
+  'chat.example.template.3.prompt': string;
 
   // Preview modal
   'preview.shareMenu': string;

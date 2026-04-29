@@ -72,6 +72,8 @@ export const en: Dict = {
   'settings.show': 'Show',
   'settings.hide': 'Hide',
   'settings.model': 'Model',
+  'settings.modelCustomOption': 'Custom…',
+  'settings.modelCustomPlaceholder': 'Enter a model id (e.g. my-custom-model)',
   'settings.baseUrl': 'Base URL',
   'settings.apiHint':
     'Calls go directly from this browser to the base URL you set. No proxy. The key never leaves localStorage.',
@@ -262,18 +264,47 @@ export const en: Dict = {
   'chat.send': 'Send',
   'chat.stop': 'Stop',
   'chat.removeAria': 'Remove {name}',
-  'chat.example1Title': 'Editorial pitch deck',
-  'chat.example1Tag': 'Magazine',
-  'chat.example1Prompt':
-    'A 10-slide editorial pitch deck for a design studio raising a seed round — Swiss-grid layout, oversized serif headlines with bold drop caps, monospace section numbers, generous negative space, and full-bleed photo slides interleaved with text-heavy ones. Cover, vision, market, product, traction, team, ask, contact.',
-  'chat.example2Title': 'SaaS analytics dashboard',
-  'chat.example2Tag': 'Data',
-  'chat.example2Prompt':
+  // prototype kind: mobile App, dashboard, marketing landing page
+  'chat.example.prototype.1.title': 'Mobile fitness app',
+  'chat.example.prototype.1.tag': 'Mobile',
+  'chat.example.prototype.1.prompt':
+    'A habit-forming mobile fitness app, three core screens — daily check-in (streak calendar, heart-rate ring, today\'s workout summary), workout detail (move-by-move steps, set timers, personal-best comparisons), and weekly review (stacked sleep/training/recovery bars, coach commentary card, next-week goals). Dark theme, energetic accent color, card-based layout.',
+  'chat.example.prototype.2.title': 'SaaS analytics dashboard',
+  'chat.example.prototype.2.tag': 'Data',
+  'chat.example.prototype.2.prompt':
     'A dense analytics dashboard for a developer-tools SaaS — KPI strip with week-over-week deltas, two stacked line charts (MRR and active workspaces), a world heatmap of usage, a cohort retention grid, a top-customers leaderboard, and a real-time event feed. Dark theme, tabular monospace numerals, sparkline accents.',
-  'chat.example3Title': 'Annual report long-scroll',
-  'chat.example3Tag': 'Editorial',
-  'chat.example3Prompt':
+  'chat.example.prototype.3.title': 'AI notes landing page',
+  'chat.example.prototype.3.tag': 'Marketing',
+  'chat.example.prototype.3.prompt':
+    'A long-scroll marketing landing page for an AI notes product — hero (animated typing headline, hovering product screenshot), pain-point comparison (old vs new in two columns), four feature demos (each with a GIF and a code snippet), social proof (logo wall plus quote cards), pricing comparison table, bottom CTA. Modern sans-serif, restrained gradient accents.',
+
+  // deck kind: pitch deck, quarterly review, product launch keynote
+  'chat.example.deck.1.title': 'Editorial pitch deck',
+  'chat.example.deck.1.tag': 'Magazine',
+  'chat.example.deck.1.prompt':
+    'A 10-slide editorial pitch deck for a design studio raising a seed round — Swiss-grid layout, oversized serif headlines with bold drop caps, monospace section numbers, generous negative space, and full-bleed photo slides interleaved with text-heavy ones. Cover, vision, market, product, traction, team, ask, contact.',
+  'chat.example.deck.2.title': 'Quarterly business review',
+  'chat.example.deck.2.tag': 'Data',
+  'chat.example.deck.2.prompt':
+    'A 12-slide Q3 business review for a SaaS company — exec summary scoreboard, ARR growth waterfall, new/churned customer profiles, product milestone timeline, key user-research insights, competitive moves, risks and mitigations, Q4 priorities, hiring asks, thank-you. Dark business theme, monospace numerals, page numbers and watermarks bottom-right.',
+  'chat.example.deck.3.title': 'Product launch keynote',
+  'chat.example.deck.3.tag': 'Launch',
+  'chat.example.deck.3.prompt':
+    '8 keynote-style slides for a pro photography product launch — each anchored by a full-bleed hero image overlaid with a single minimal headline (e.g., "For the unrepeatable moment."), key specs laid out horizontally with hairline dividers, transitional pages set entirely in oversized brand type. Black-and-white throughout, color reserved for product imagery only.',
+
+  // template kind: annual report, technical blog post, prospectus summary
+  'chat.example.template.1.title': 'Annual report long-scroll',
+  'chat.example.template.1.tag': 'Editorial',
+  'chat.example.template.1.prompt':
     'An interactive annual report for a climate non-profit — long-scroll editorial layout mixing big pull-quote blocks, data visualizations (stacked bars, animated counters, a choropleth map of project sites), photography breakers, donor wall, and a final call-to-action. Modern serif body, sans-serif chart labels, earthy paper palette.',
+  'chat.example.template.2.title': 'Technical blog post',
+  'chat.example.template.2.tag': 'Blog',
+  'chat.example.template.2.prompt':
+    'Lay out an in-depth technical post titled "How we cut build time from 14 minutes to 90 seconds" — sticky clickable TOC, anchor-linked section headers, collapsible code snippets with syntax highlighting, captioned figures, key concepts surfaced as side-margin cards, author card and related-reading list at the end. Serif body, monospace code, restrained accent color.',
+  'chat.example.template.3.title': 'Prospectus summary',
+  'chat.example.template.3.tag': 'Business',
+  'chat.example.template.3.prompt':
+    'An Executive Summary spread for a clean-energy company\'s prospectus — two-column body with footnotes alongside, drop caps on opening paragraphs, financial tables with zebra striping and right-aligned numerals, risk callouts in warning-tone blocks, "use of proceeds" donut chart and an executive roster at the close. Professional serif type, paper-toned background, print-grade grid spacing.',
 
   'preview.shareMenu': 'Share ▾',
   'preview.openInNewTab': 'Open in new tab',

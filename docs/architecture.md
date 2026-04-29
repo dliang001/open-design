@@ -57,7 +57,9 @@ browser ──► od.yourdomain.com (Vercel serverless)
               Anthropic Messages API (BYOK stored in browser)
 ```
 
-No local CLI, no daemon. Degraded experience — no Claude Code skills, no filesystem artifacts (stored in IndexedDB), no PPTX export. But it's the "just try it" path. Keys stored `localStorage` with explicit warning.
+No local CLI, no daemon. Degraded experience — no Claude Code skills (no real Read/Write/Bash), filesystem artifacts go to the daemon when it's reachable and to IndexedDB otherwise. But it's the "just try it" path. Keys stored `localStorage` with explicit warning.
+
+PDF and PPTX export both run **client-side** in this topology (no Puppeteer, no server). See §3.7 for the implementations and §12 for the API-mode pitfalls that drove that choice — most notably, the BYOK API call passes no `tools` parameter, so weaker models (DeepSeek and below) hallucinate tool calls as text unless the system prompt actively suppresses the workflow steps that assume them.
 
 The three topologies share the same web bundle; the difference is which transports are enabled.
 
@@ -176,12 +178,14 @@ Rationale:
 
 ### 3.7 Export pipeline
 
+All four formats run **client-side** today — see [`src/runtime/exports.ts`](../src/runtime/exports.ts) and [`src/runtime/pptx.ts`](../src/runtime/pptx.ts). Topology C therefore has the same export menu as Topology A/B. The earlier draft had Puppeteer for PDF and a daemon-side `pptxgenjs`; we collapsed both onto the browser to keep BYOK-only deployments at full feature parity. The pitfalls that pushed us there are in §12.
+
 | Format | How |
 |---|---|
-| HTML (self-contained) | Inline all CSS, rewrite asset URLs to data: URIs |
-| PDF | `puppeteer` → `page.pdf()` on the rendered HTML |
-| PPTX | `deck-skill` outputs a JSON intermediate (`slides.json`); `pptxgenjs` generates the `.pptx` |
-| ZIP | `archiver` over `artifacts/<id>/` |
+| HTML (self-contained) | `buildSrcdoc(html)` — inline CSS already lives in the artifact; this just stamps a Blob and downloads |
+| PDF | `window.open(blobUrl)` + injected `<script>window.print()</script>`. Two style overlays are injected on the way: `UNIVERSAL_PRINT_CSS` (forces `print-color-adjust: exact`, demotes `position: fixed`/`sticky` so dark themes don't print blank) and, for decks, `DECK_PRINT_CSS` (1920×1080 `@page`, one slide per page). |
+| PPTX | `pptxgenjs` (~127 KB gzipped, dynamic `import()`). DOM-parses the HTML, slices it into slides (`section.slide` / `.slide` / `[data-screen-label]` for decks; `<section>` or single page for everything else), extracts h1/h2 + p/li/blockquote + same-origin/data-URL images, emits a real `.pptx` with text-on-slide layout. |
+| ZIP | `buildZip()` (stored mode, no compression) over the single HTML. Future: pull skill assets in alongside. |
 | Markdown | direct copy if artifact is `.md`, otherwise skill-defined render |
 
 ## 4. Data flow — a typical "generate prototype" turn
@@ -338,3 +342,62 @@ We inherit the agent's permission model on purpose — we don't invent our own s
 - Collaborative editing
 - Mobile web support (desktop only in MVP)
 - Offline mode (beyond "the agent is local" — we don't cache model responses)
+
+## 12. Pitfalls and lessons learned
+
+These are non-obvious failure modes we have already hit. New code in any of these areas should re-read this section before "fixing" what looks broken — most of these problems have a load-bearing reason behind their solution.
+
+### 12.1 API mode does not register tools — weaker models hallucinate them as text
+
+[`src/providers/anthropic.ts`](../src/providers/anthropic.ts) calls `client.messages.stream({ model, system, messages, max_tokens })` with **no `tools` array**. The system prompt — composed from [`prompts/discovery.ts`](../src/prompts/discovery.ts) and [`prompts/official-system.ts`](../src/prompts/official-system.ts) — assumes Read / Write / Edit / Bash / Glob / Grep / TodoWrite are all available, because in daemon mode they are.
+
+- Claude (Anthropic) silently skips tool steps and goes straight to `<artifact>` — it knows the tools aren't on the wire.
+- DeepSeek (and most non-Anthropic providers behind their `/anthropic`-compatible endpoints) **do not have that fine-grained awareness**. They emit text-shaped tool calls instead — `<tool_call name="TodoWrite">{"todos":[…]}</tool_call>`, `TodoWrite({todos:[…]})`, even pseudocode like `Read(path="DESIGN.md")`. Those bytes get rendered as raw chat content, do nothing, and burn output tokens that should have gone toward the actual HTML.
+
+**The fix that has to stay in place:** [`composeSystemPrompt({..., apiMode: true})`](../src/prompts/system.ts) appends `API_MODE_OVERRIDE` as the last block of the prompt. It explicitly forbids `<tool_call>` / `<OD-tool>` / `<function_call>` / pseudocode, says no Read/Write/Bash/TodoWrite/etc. are available, and collapses the workflow to "(optional) one short prose paragraph + one `<artifact>` block — stop". `ProjectView.tsx` passes `apiMode: config.mode === 'api'` based on the user's selected execution mode.
+
+If you ever add a new field to `composeSystemPrompt`, keep `API_MODE_OVERRIDE` *last* — later instructions win in long prompts and that's the whole point.
+
+### 12.2 `max_tokens` of 8192 is too small for a real artifact
+
+Same call site. We previously capped `max_tokens` at 8192 because that was the safe default years ago. A complete dashboard / deck / template HTML routinely runs 15K–25K tokens once you include inlined CSS, SVG charts, and per-slide content. The model would finish planning, run out of budget, and never reach `<artifact>`. **Floor is now 32768.** All current Claude models (4.5+) support ≥32K output; deepseek-v4-{flash,pro} support 64K. Don't lower it without measuring artifact-completion rate first.
+
+### 12.3 The artifact parser is strict — keep the stray-HTML fallback wired
+
+[`src/artifacts/parser.ts`](../src/artifacts/parser.ts) only fires `artifact:start` / `artifact:chunk` / `artifact:end` for content wrapped in literal `<artifact identifier="..." type="..." title="...">…</artifact>` tags. Anything else streams through as plain text events. That is correct — letting any `<html>`-shaped output count as an artifact would surface false positives mid-thinking.
+
+But weaker models sometimes do produce a complete `<!doctype html>…</html>` and forget the wrapper — even with the API-mode override above. Without a fallback, the right-hand pane stays empty even though the chat clearly produced a deliverable. So `parser.ts` exports `extractStrayHtml(content)` and `ProjectView.onDone` runs it as a last resort: if `liveHtml` (artifact stream buffer) is empty AND the assistant text contains a complete \`\`\`html fence or raw `<!doctype html>…</html>` window, we promote that to an artifact retroactively, lift `<title>` for the filename, and persist via `persistArtifact`.
+
+The fallback **only** runs when no artifact was streamed. Don't expand it to "always scan the message for HTML" — that breaks the case where the model emits a proper artifact AND mentions HTML in commentary.
+
+### 12.4 PDF print needs universal CSS, not just deck CSS
+
+`window.print()` is the entire PDF pipeline (we deliberately skipped Puppeteer to keep Topology C at parity). The browser default for `@media print` strips background colors and ink-saves — which means a dark-themed dashboard prints as pure black text on white, often *appearing blank* because the foreground is also dark on the assumption of a dark background. We previously shipped print CSS only for decks, so non-deck artifacts printed blank.
+
+`UNIVERSAL_PRINT_CSS` in [`src/runtime/exports.ts`](../src/runtime/exports.ts) is now injected on every PDF export *before* the deck-specific layer. The load-bearing rules:
+- `print-color-adjust: exact !important` — forces backgrounds to render
+- demote `position: fixed` / `position: sticky` to `static` — otherwise sticky headers reprint on every page or eclipse content
+- `@page { margin: 12mm }` (deck mode then overrides to `0`)
+- `break-inside: avoid-page` on top-level blocks — fewer ugly mid-card splits
+
+If you regress these, dark-themed prototypes will start printing blank again.
+
+### 12.5 PPTX export should not depend on the agent
+
+The first cut of "Export as PPTX" routed through the chat: `handleExportAsPptx` synthesized a prompt asking the agent to call python-pptx and Write the file to the project folder. This was unreliable for two reasons:
+1. The path through the agent meant a brittle multi-step contract — Write tool support, correct slice boundaries from HTML, file-list refresh ordering, all had to line up.
+2. In API mode (no tools — see §12.1), it could never work at all.
+
+[`src/runtime/pptx.ts`](../src/runtime/pptx.ts) now does the work in the browser via `pptxgenjs` (dynamic-imported so it ships in its own ~127 KB gzip chunk). DOM-parse the HTML, slice on `section.slide` / `.slide` / `[data-screen-label]` for decks (or `<section>` / single-page for everything else), extract title + bullets + same-origin images, emit. It's deterministic, works in every topology, and gives the user a real `.pptx` they can open immediately.
+
+The agent path is gone. Don't bring it back as a "fallback" — the failure mode is "you waste a chat turn and still don't get a file", which is worse than the deterministic frontend version.
+
+### 12.6 `<input list="...">` (datalist) hides preset options
+
+The model picker in [`SettingsDialog.tsx`](../src/components/SettingsDialog.tsx) was an `<input list="suggested-models">` plus a `<datalist>` of preset model ids — typeable AND selectable. In practice users (correctly) read it as a plain text input and never realized the dropdown existed; bug reports came in as "I can't pick deepseek-v4-pro, only flash works", because the field was prefilled with `deepseek-v4-flash` and the datalist disclosure required clicking precisely on the field. Replaced with a real `<select>` plus a "Custom…" terminal option that reveals a text input when chosen — every preset is visible the moment you click, custom ids still work.
+
+Lesson generalizes: prefer `<select>` for short bounded lists (≤ ~10 options). Reserve `datalist` for genuinely unbounded autocomplete.
+
+### 12.7 Per-mode example starter prompts
+
+[`ChatPane.tsx`](../src/components/ChatPane.tsx) used to pull from a flat global `EXAMPLE_PROMPT_KEYS` array — three cards regardless of project kind. Prototype users got a "10-slide pitch deck" suggestion as their first card, deck users got a "long-scroll annual report" suggestion. Now `EXAMPLES_BY_KIND` is keyed by `prototype` / `deck` / `template` and `ChatPane` accepts a `projectKind` prop; `ProjectView` passes `project.metadata?.kind`. Keep the three cards-per-kind shape — more cards crowds the empty state, fewer feels barren.
