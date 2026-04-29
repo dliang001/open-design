@@ -19,6 +19,10 @@ interface Props {
   isDeck?: boolean;
   onExportAsPptx?: ((fileName: string) => void) | undefined;
   streaming?: boolean;
+  // Canvas size advertised by the active skill (e.g. 1080×1080 for
+  // social-post-square). Forwarded to the PNG exporter so artifacts
+  // rasterise at the size the skill targeted, not the iframe's CSS box.
+  exportDimensions?: { width: number; height: number };
 }
 
 export function FileViewer({
@@ -28,6 +32,7 @@ export function FileViewer({
   isDeck,
   onExportAsPptx,
   streaming,
+  exportDimensions,
 }: Props) {
   if (file.kind === 'html') {
     return (
@@ -38,6 +43,7 @@ export function FileViewer({
         isDeck={Boolean(isDeck)}
         onExportAsPptx={onExportAsPptx}
         streaming={Boolean(streaming)}
+        exportDimensions={exportDimensions}
       />
     );
   }
@@ -103,6 +109,7 @@ function HtmlViewer({
   isDeck,
   onExportAsPptx,
   streaming,
+  exportDimensions,
 }: {
   projectId: string;
   file: ProjectFile;
@@ -110,6 +117,7 @@ function HtmlViewer({
   isDeck: boolean;
   onExportAsPptx?: ((fileName: string) => void) | undefined;
   streaming: boolean;
+  exportDimensions?: { width: number; height: number };
 }) {
   const t = useT();
   const [mode, setMode] = useState<'preview' | 'source'>('preview');
@@ -559,7 +567,11 @@ function HtmlViewer({
                       setShareMenuOpen(false);
                       setPngBusy(true);
                       try {
-                        await exportAsPng(source, exportTitle);
+                        await exportAsPng(source, exportTitle, {
+                          sourceIframe: iframeRef.current,
+                          width: exportDimensions?.width,
+                          height: exportDimensions?.height,
+                        });
                       } finally {
                         setPngBusy(false);
                       }

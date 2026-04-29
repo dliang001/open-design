@@ -279,6 +279,7 @@ function ExampleCard({
   const [shareOpen, setShareOpen] = useState(false);
   const [pngBusy, setPngBusy] = useState(false);
   const shareRef = useRef<HTMLDivElement | null>(null);
+  const previewIframeRef = useRef<HTMLIFrameElement | null>(null);
 
   useEffect(() => {
     if (!shareOpen) return;
@@ -326,8 +327,12 @@ function ExampleCard({
         {html ? (
           <>
             <iframe
+              ref={previewIframeRef}
               title={`${skill.name} ${t('examples.previewLabel').toLowerCase()}`}
-              sandbox="allow-scripts"
+              // allow-same-origin lets exportAsPng capture this iframe's
+              // document directly (faster path); the example HTML is
+              // first-party content shipped with the skill, so it's safe.
+              sandbox="allow-scripts allow-same-origin"
               srcDoc={buildSrcdoc(html)}
               tabIndex={-1}
             />
@@ -427,7 +432,12 @@ function ExampleCard({
                     setShareOpen(false);
                     setPngBusy(true);
                     try {
-                      await exportAsPng(html, exportTitle);
+                      const dim = skill.dimensions?.[0];
+                      await exportAsPng(html, exportTitle, {
+                        sourceIframe: previewIframeRef.current,
+                        width: dim?.width,
+                        height: dim?.height,
+                      });
                     } finally {
                       setPngBusy(false);
                     }

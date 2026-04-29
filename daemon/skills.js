@@ -52,6 +52,7 @@ export async function listSkills(skillsRoot) {
         speakerNotes: normalizeBoolHint(data.od?.speaker_notes),
         animations: normalizeBoolHint(data.od?.animations),
         examplePrompt: derivePrompt(data),
+        dimensions: normalizeDimensions(data.od?.dimensions),
         body: hasAttachments ? withSkillRootPreamble(body, dir) : body,
         dir,
       });
@@ -103,6 +104,27 @@ function normalizeDefaultFor(value) {
 // Optional `od.fidelity` hint for prototype skills. Only 'wireframe' and
 // 'high-fidelity' are meaningful — anything else collapses to null so the
 // caller falls back to the form default ('high-fidelity').
+// Coerce `od.dimensions` into [{ name, width, height }, ...]. Each entry
+// must have positive integer width and height; anything malformed is
+// dropped silently so a single bad row doesn't break the whole skill.
+function normalizeDimensions(value) {
+  if (!Array.isArray(value)) return [];
+  const out = [];
+  for (const entry of value) {
+    if (!entry || typeof entry !== "object") continue;
+    const w = Number(entry.width);
+    const h = Number(entry.height);
+    if (!Number.isFinite(w) || w <= 0) continue;
+    if (!Number.isFinite(h) || h <= 0) continue;
+    const name =
+      typeof entry.name === "string" && entry.name.trim()
+        ? entry.name.trim()
+        : `${Math.round(w)}x${Math.round(h)}`;
+    out.push({ name, width: Math.round(w), height: Math.round(h) });
+  }
+  return out;
+}
+
 function normalizeFidelity(value) {
   if (value === "wireframe" || value === "high-fidelity") return value;
   return null;

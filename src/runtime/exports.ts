@@ -145,30 +145,62 @@ function injectDeckPrintStylesheet(doc: string): string {
   return tag + doc;
 }
 
-// Render the artifact in a temporary off-screen iframe, then snapshot the
-// document with html2canvas and download a PNG. The iframe is needed to
-// give the artifact its own document context (CSS resets, fonts, layout
-// roots) — capturing a fragment of the host document would inherit our
-// app stylesheet and look nothing like the preview.
+// Snapshot an artifact into a PNG via html2canvas.
 //
-// `width` / `height` default to 1280×800 (a common laptop hero crop) but
-// callers should pass the artifact's intended canvas size when known.
-// Skills that target a specific medium (e.g. social-post-square at
-// 1080×1080) declare their dimensions in SKILL.md frontmatter; the share
-// menu reads those and forwards them here.
+// Two capture paths:
+//   1. `opts.sourceIframe` provided — capture from an iframe that's already
+//      mounted in the DOM (the live preview the user is looking at). This
+//      is the fast path: no extra render, the PNG exactly matches what
+//      they see. Requires the iframe's sandbox to include
+//      `allow-same-origin` so we can read its document.
+//   2. No `sourceIframe` — render `html` into a temporary off-screen
+//      iframe and capture from there. Used by code paths that don't have
+//      a live iframe handy, or when the live iframe is sandboxed without
+//      same-origin access.
 //
-// `scale` controls device-pixel ratio. Default 2 produces ~retina output
-// (~2.6 MB for 1280×800); pass 1 if file size matters more than fidelity.
+// `width` / `height` default to 1280×800 (a generic laptop hero crop) but
+// callers should pass the artifact's intended canvas size whenever the
+// skill declares one (skills like social-post-square ship dimensions in
+// their SKILL.md frontmatter; FileViewer / PreviewModal forward them).
+//
+// `scale` controls device-pixel ratio. Default 2 produces ~retina output;
+// pass 1 if file size matters more than fidelity.
 export async function exportAsPng(
   html: string,
   title: string,
-  opts?: { width?: number; height?: number; scale?: number; backgroundColor?: string },
+  opts?: {
+    width?: number;
+    height?: number;
+    scale?: number;
+    backgroundColor?: string;
+    sourceIframe?: HTMLIFrameElement | null;
+  },
 ): Promise<void> {
-  const width = opts?.width ?? 1280;
-  const height = opts?.height ?? 800;
   const scale = opts?.scale ?? Math.min(2, window.devicePixelRatio || 1);
   const backgroundColor = opts?.backgroundColor ?? '#ffffff';
 
+  const live = opts?.sourceIframe;
+  // Try the live-iframe path first when one was passed in. If it's present
+  // but blocked by sandbox restrictions (no same-origin access), fall back
+  // to the off-screen render so the export still succeeds.
+  if (live && canReadIframeDocument(live)) {
+    const liveDoc = live.contentDocument!;
+    const rect = live.getBoundingClientRect();
+    // The skill's intended canvas wins. If neither width/height nor the
+    // iframe rect give us a size, we fall back to defaults.
+    const width = opts?.width ?? (Math.round(rect.width) || 1280);
+    const height = opts?.height ?? (Math.round(rect.height) || 800);
+    await captureAndDownload(liveDoc.documentElement, title, {
+      width,
+      height,
+      scale,
+      backgroundColor,
+    });
+    return;
+  }
+
+  const width = opts?.width ?? 1280;
+  const height = opts?.height ?? 800;
   const iframe = document.createElement('iframe');
   iframe.style.position = 'fixed';
   iframe.style.left = '-99999px';
@@ -201,29 +233,52 @@ export async function exportAsPng(
 
     const doc = iframe.contentDocument;
     if (!doc) throw new Error('PNG export: iframe document unavailable');
-
-    const html2canvasMod = await import('html2canvas');
-    const html2canvas = html2canvasMod.default;
-    const canvas = await html2canvas(doc.documentElement, {
+    await captureAndDownload(doc.documentElement, title, {
       width,
       height,
-      windowWidth: width,
-      windowHeight: height,
-      backgroundColor,
-      useCORS: true,
-      allowTaint: false,
       scale,
-      logging: false,
+      backgroundColor,
     });
-
-    const blob: Blob = await new Promise((resolve, reject) => {
-      canvas.toBlob((b) => {
-        if (b) resolve(b);
-        else reject(new Error('PNG export: canvas.toBlob returned null'));
-      }, 'image/png');
-    });
-    triggerDownload(blob, `${safeFilename(title, 'artifact')}.png`);
   } finally {
     iframe.remove();
   }
+}
+
+// Cross-origin / sandbox restrictions throw on any access to
+// `contentDocument`. We probe with a try-catch so callers can fall back
+// to the off-screen render path silently when a live iframe is unreadable.
+function canReadIframeDocument(iframe: HTMLIFrameElement): boolean {
+  try {
+    return Boolean(iframe.contentDocument && iframe.contentDocument.documentElement);
+  } catch {
+    return false;
+  }
+}
+
+async function captureAndDownload(
+  target: HTMLElement,
+  title: string,
+  opts: { width: number; height: number; scale: number; backgroundColor: string },
+): Promise<void> {
+  const html2canvasMod = await import('html2canvas');
+  const html2canvas = html2canvasMod.default;
+  const canvas = await html2canvas(target, {
+    width: opts.width,
+    height: opts.height,
+    windowWidth: opts.width,
+    windowHeight: opts.height,
+    backgroundColor: opts.backgroundColor,
+    useCORS: true,
+    allowTaint: false,
+    scale: opts.scale,
+    logging: false,
+  });
+
+  const blob: Blob = await new Promise((resolve, reject) => {
+    canvas.toBlob((b) => {
+      if (b) resolve(b);
+      else reject(new Error('PNG export: canvas.toBlob returned null'));
+    }, 'image/png');
+  });
+  triggerDownload(blob, `${safeFilename(title, 'artifact')}.png`);
 }

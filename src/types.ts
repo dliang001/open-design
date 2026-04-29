@@ -99,6 +99,17 @@ export interface SkillSummary {
   animations?: boolean | null;
   hasBody: boolean;
   examplePrompt: string;
+  /** Optional list of canvas sizes the skill targets (e.g. social-post-square
+   *  ships [{ name: "square-1080", width: 1080, height: 1080 }, ...]). The
+   *  PNG exporter picks the first entry by default; the picker can offer the
+   *  rest. Empty array when the skill is responsive / freeform. */
+  dimensions?: SkillDimension[];
+}
+
+export interface SkillDimension {
+  name: string;
+  width: number;
+  height: number;
 }
 
 export interface SkillDetail extends SkillSummary {

@@ -666,6 +666,17 @@ export function ProjectView({
     [skills, project.skillId],
   );
 
+  // First declared canvas size from the active skill, if any. Forwarded
+  // to FileWorkspace → FileViewer → exportAsPng so artifacts rasterise
+  // at the skill's intended size (1080×1080 for social-post-square,
+  // 794×1123 for A4 poster, etc.).
+  const exportDimensions = useMemo(() => {
+    const dims = skills.find((s) => s.id === project.skillId)?.dimensions;
+    if (!dims || dims.length === 0) return undefined;
+    const first = dims[0]!;
+    return { width: first.width, height: first.height };
+  }, [skills, project.skillId]);
+
   // Hand the pending prompt to ChatPane exactly once. We snapshot the value
   // into local state on mount so it survives the ChatPane remount triggered
   // when `activeConversationId` resolves from `null` to a real id (the
@@ -772,6 +783,7 @@ export function ProjectView({
           onExportAsPptx={handleExportAsPptx}
           streaming={streaming}
           openRequest={openRequest}
+          exportDimensions={exportDimensions}
           tabsState={openTabsState}
           onTabsStateChange={persistTabsState}
         />
