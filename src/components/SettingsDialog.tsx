@@ -285,6 +285,41 @@ export function SettingsDialog({
                   <option value={m} key={m} />
                 ))}
               </datalist>
+              {suggestedModels.length > 0 ? (
+                <div
+                  style={{
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    gap: 6,
+                    marginTop: 6,
+                  }}
+                >
+                  {suggestedModels.map((m) => {
+                    const active = cfg.model === m;
+                    return (
+                      <button
+                        key={m}
+                        type="button"
+                        onClick={() => setCfg({ ...cfg, model: m })}
+                        aria-pressed={active}
+                        style={{
+                          padding: '4px 10px',
+                          borderRadius: 999,
+                          fontSize: 12,
+                          lineHeight: 1.4,
+                          border: '1px solid var(--border-soft)',
+                          background: active ? 'var(--accent-soft, #f6e9e0)' : 'transparent',
+                          color: active ? 'var(--text)' : 'var(--text-muted)',
+                          fontWeight: active ? 600 : 500,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        {m}
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : null}
             </label>
             <label className="field">
               <span className="field-label">{t('settings.baseUrl')}</span>
